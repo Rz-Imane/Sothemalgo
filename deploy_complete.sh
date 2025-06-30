@@ -41,12 +41,13 @@ if ! grep -q "gunicorn" requirements.txt; then
     echo "gunicorn==21.2.0" >> requirements.txt
 fi
 
-# 4. Copier les fichiers (à adapter selon votre méthode)
-echo "Les fichiers doivent être copiés manuellement dans $APP_DIR"
-echo "Méthodes recommandées:"
-echo "  - Git: git clone https://github.com/your-repo/sothemalgo.git $APP_DIR"
-echo "  - SCP: scp -r /local/path/* user@server:$APP_DIR/"
-echo "  - RSYNC: rsync -av /local/path/ user@server:$APP_DIR/"
+# 4. Clonage du repository depuis GitHub
+echo "Clonage du repository Sothemalgo depuis GitHub..."
+cd $APP_DIR
+sudo -u $APP_USER git clone https://github.com/abdobzx/sothema-algo.git .
+
+# Alternative pour mise à jour si le code existe déjà
+# sudo -u $APP_USER git pull origin main
 
 # 5. Configuration de l'environnement Python
 echo "Configuration de l'environnement Python..."

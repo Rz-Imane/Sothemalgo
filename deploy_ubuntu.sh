@@ -20,8 +20,18 @@ echo "Création du répertoire de l'application..."
 sudo mkdir -p /opt/sothemalgo
 sudo chown sothemalgo:sothemalgo /opt/sothemalgo
 
-# 4. Copie des fichiers de l'application
-echo "Copie des fichiers..."
-# Cette partie sera adaptée selon votre méthode de transfert (git, scp, etc.)
+# 4. Copie des fichiers de l'application via Git
+echo "Clonage du repository depuis GitHub..."
+cd /opt/sothemalgo
+sudo -u sothemalgo git clone https://github.com/abdobzx/sothema-algo.git .
 
-echo "Script de base terminé. Suivez les instructions suivantes pour compléter le déploiement."
+# 5. Configuration de l'environnement Python
+echo "Configuration de l'environnement Python..."
+sudo -u sothemalgo python3 -m venv sothemalgo_env
+sudo -u sothemalgo bash -c "source sothemalgo_env/bin/activate && pip install --upgrade pip"
+sudo -u sothemalgo bash -c "source sothemalgo_env/bin/activate && pip install -r requirements.txt"
+
+# 6. Création des répertoires supplémentaires
+sudo -u sothemalgo mkdir -p logs uploads
+
+echo "Déploiement de base terminé. Exécutez maintenant ./deploy_complete.sh pour finaliser."

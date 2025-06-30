@@ -21,11 +21,12 @@ sudo apt install -y python3 python3-pip python3-venv nginx supervisor git curl
 ## Étape 2: Transfert des fichiers
 
 ### Option A: Via Git (recommandé)
+
 ```bash
 sudo mkdir -p /opt/sothemalgo
 sudo chown $USER:$USER /opt/sothemalgo
 cd /opt/sothemalgo
-git clone https://github.com/your-username/sothemalgo.git .
+git clone https://github.com/abdobzx/sothema-algo.git .
 ```
 
 ### Option B: Via SCP depuis votre machine locale
