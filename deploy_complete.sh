@@ -98,6 +98,23 @@ sudo supervisorctl start sothemalgo-gunicorn
 sudo systemctl enable nginx
 sudo systemctl enable supervisor
 
+# 10. Diagnostic des services
+echo "Diagnostic des services..."
+echo "  Statut Supervisor:"
+sudo supervisorctl status sothemalgo-gunicorn
+
+echo "  Ports utilisés:"
+sudo netstat -tlnp | grep -E "(5000|80)"
+
+echo "  Test de l'application sur le port 5000:"
+if curl -s http://localhost:5000 > /dev/null; then
+    echo "    ✅ Gunicorn répond sur le port 5000"
+else
+    echo "    ❌ Gunicorn ne répond pas sur le port 5000"
+    echo "  Logs Gunicorn:"
+    tail -10 $APP_DIR/logs/gunicorn.log 2>/dev/null || echo "    Aucun log trouvé"
+fi
+
 # 10. Configuration du firewall (optionnel)
 echo "Configuration du firewall..."
 sudo ufw allow 22/tcp   # SSH
