@@ -42,12 +42,20 @@ if ! grep -q "gunicorn" requirements.txt; then
 fi
 
 # 4. Clonage du repository depuis GitHub
-echo "Clonage du repository Sothemalgo depuis GitHub..."
+echo "Configuration du repository Sothemalgo..."
 cd $APP_DIR
-sudo -u $APP_USER git clone https://github.com/abdobzx/sothema-algo.git .
 
-# Alternative pour mise à jour si le code existe déjà
-# sudo -u $APP_USER git pull origin main
+# Vérifier si c'est un repository git existant
+if [ -d ".git" ]; then
+    echo "Repository existe, mise à jour..."
+    # Corriger les permissions git
+    sudo git config --global --add safe.directory $APP_DIR
+    sudo -u $APP_USER git config --global --add safe.directory $APP_DIR
+    sudo -u $APP_USER git pull origin main
+else
+    echo "Nouveau clonage depuis GitHub..."
+    sudo -u $APP_USER git clone https://github.com/abdobzx/sothema-algo.git .
+fi
 
 # 5. Configuration de l'environnement Python
 echo "Configuration de l'environnement Python..."
@@ -69,8 +77,20 @@ sudo supervisorctl update
 echo "Configuration de Nginx..."
 sudo cp nginx_sothemalgo.conf /etc/nginx/sites-available/$NGINX_SITE
 sudo ln -sf /etc/nginx/sites-available/$NGINX_SITE /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
-sudo systemctl reload nginx
+if [ $? -eq 0 ]; then
+    # Démarrer nginx s'il n'est pas actif
+    if ! systemctl is-active --quiet nginx; then
+        sudo systemctl start nginx
+    else
+        sudo systemctl reload nginx
+    fi
+    echo "Nginx configuré et démarré avec succès"
+else
+    echo "Erreur dans la configuration Nginx"
+    exit 1
+fi
 
 # 9. Démarrage des services
 echo "Démarrage des services..."
