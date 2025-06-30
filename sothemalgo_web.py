@@ -6,6 +6,10 @@ import json
 import random
 from datetime import datetime, timedelta
 import random
+
+# Configuration automatique du répertoire de base
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Mise à jour des importations
 from sothemalgo_grouper import (
     load_ofs_from_file,
@@ -107,7 +111,7 @@ def parse_output_file(file_path):
         return {'error': f'Erreur lors du parsing du fichier: {str(e)}', 'groups': [], 'unassigned_ofs': []}
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = '/Users/abderrahman/Desktop/Sothemalgo2/uploads'
+app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.route('/', methods=['GET', 'POST'])
@@ -121,7 +125,7 @@ def index():
         post_unavailability_file_storage = request.files.get('post_unavailability_file')
 
         # Utiliser les fichiers par défaut ou ceux téléchargés
-        base_dir = '/Users/abderrahman/Desktop/Sothemalgo2'
+        base_dir = BASE_DIR
         
         # Vérifier si l'utilisateur veut utiliser les données de test
         use_test_data = request.form.get('use_test_data', 'false').lower() == 'true'
@@ -275,7 +279,7 @@ def index():
 @app.route('/display-output')
 def display_output():
     # Essayer d'abord le fichier généré par l'interface web (plus récent), puis celui du répertoire courant
-    base_dir = '/Users/abderrahman/Desktop/Sothemalgo2'
+    base_dir = BASE_DIR
     web_output_file = os.path.join(app.config['UPLOAD_FOLDER'], 'besoins_groupes_output_web.txt')
     static_output_file = os.path.join(base_dir, 'besoins_groupes_output.txt')
     
@@ -314,7 +318,7 @@ def get_visualization_data():
     """API endpoint pour récupérer les données de visualisation en temps réel"""
     try:
         # Lire les données des fichiers de sortie existants
-        base_dir = '/Users/abderrahman/Desktop/Sothemalgo2'
+        base_dir = BASE_DIR
         
         # Rechercher les fichiers de sortie potentiels et choisir le plus récent
         potential_files = [
