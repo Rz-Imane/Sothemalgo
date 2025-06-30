@@ -1,0 +1,13 @@
+ParentProductID,ChildProductID,QuantityChildPerParent,ChildBOMLevel
+SF2(A),PS1(A),1,0
+SF1(A),PS1(A),1,0
+SF1(A),SF2(A),1,1
+PF1(A),SF1(A),0.5,2
+PF2(A),SF1(A),0.5,2
+SF1(B),PS1(B),1,0
+PF1(B),SF1(B),1,2
+PF2(B),SF1(B),0.25,2
+PF3(B),SF1(B),0.5,2
+SF1(C),PS1(C),1,0
+PF1(C),SF1(C),1,2
+PF2(C),SF1(C),1,2

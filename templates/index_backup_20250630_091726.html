@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SothemaAL - Interface</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <style>
+        /* Performance optimizations */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* GPU acceleration for smooth performance */
+        .container,
+        .file-input-group,
+        .params-section {
+            transform: translateZ(0);
+            will-change: auto;
+        }
+
+        /* Reduce repaint and reflow */
+        .file-input-group:hover {
+            border-color: rgba(120, 119, 198, 0.8);
+            background: rgba(22, 27, 34, 0.9);
+            transform: translateY(-1px) translateZ(0);
+            box-shadow: 0 0 15px rgba(120, 119, 198, 0.1);
+        }
+
+        /* Optimize transitions */
+        .file-input-group {
+            transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px) translateZ(0);
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0a0a;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            position: relative;
+            overflow-x: hidden;
+            font-size: 26px;
+            line-height: 1.8;
+        }
+
+        /* GitHub Copilot-style optimized background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15), transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255, 110, 199, 0.15), transparent 50%);
+            animation: float 30s ease-in-out infinite;
+            pointer-events: none;
+            z-index: -1;
+            will-change: transform;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .container {
+            width: 98%;
+            max-width: none;
+            margin: 1% auto;
+            background: rgba(13, 17, 23, 0.90);
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            border-radius: 16px;
+            box-shadow: 0 0 20px rgba(120, 119, 198, 0.1);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+            min-height: 95vh;
+            position: relative;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.6), transparent);
+        }
+
+        .header {
+            background: linear-gradient(135deg, rgba(120, 119, 198, 0.1) 0%, rgba(255, 110, 199, 0.1) 100%);
+            border-bottom: 1px solid rgba(48, 54, 61, 0.8);
+            color: #e6edf3;
+            padding: 60px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.8), transparent);
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #7877c6, #ff6ec7);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .header p {
+            font-size: 5.2em;
+            color: #f0f6fc;
+            margin: 0;
+            font-weight: 800;
+            background: linear-gradient(135deg, #7877c6, #ff6ec7);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 40px rgba(120, 119, 198, 0.4);
+            letter-spacing: -0.02em;
+            text-transform: uppercase;
+        }
+
+        .content {
+            padding: 60px;
+            background: transparent;
+        }
+
+        .default-files-info {
+            background: rgba(22, 27, 34, 0.8);
+            border: 1px solid rgba(48, 54, 61, 0.6);
+            border-left: 3px solid rgba(120, 119, 198, 0.8);
+            padding: 40px;
+            margin-bottom: 50px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        .default-files-info h3 {
+            color: #e6edf3;
+            margin-bottom: 25px;
+            font-size: 2.2em;
+            font-weight: 700;
+        }
+
+        .default-files-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 16px;
+            font-size: 1.1em;
+            color: #8b949e;
+        }
+
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 40px;
+            margin-bottom: 50px;
+        }
+
+        .file-input-group {
+            background: rgba(22, 27, 34, 0.8);
+            border: 2px dashed rgba(48, 54, 61, 0.8);
+            border-radius: 16px;
+            padding: 36px;
+            text-align: center;
+            transition: all 0.2s ease;
+            position: relative;
+            backdrop-filter: blur(5px);
+        }
+
+        .file-input-group:hover {
+            border-color: rgba(120, 119, 198, 0.8);
+            background: rgba(22, 27, 34, 0.9);
+            transform: translateY(-1px) translateZ(0);
+            box-shadow: 0 0 15px rgba(120, 119, 198, 0.1);
+        }
+
+        .file-input-group label {
+            display: block;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .file-input {
+            width: 100%;
+            padding: 18px;
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            border-radius: 10px;
+            background: rgba(13, 17, 23, 0.8);
+            color: #e6edf3;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+            font-size: 1.1em;
+        }
+
+        .file-input:hover {
+            border-color: rgba(120, 119, 198, 0.8);
+            box-shadow: 0 0 10px rgba(120, 119, 198, 0.2);
+        }
+
+        .file-input:focus {
+            outline: none;
+            border-color: rgba(120, 119, 198, 1);
+            box-shadow: 0 0 15px rgba(120, 119, 198, 0.3);
+        }
+
+        .params-section {
+            background: rgba(22, 27, 34, 0.6);
+            border: 1px solid rgba(48, 54, 61, 0.6);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 40px;
+            backdrop-filter: blur(10px);
+            position: relative;
+        }
+
+        .params-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.8), transparent);
+            border-radius: 16px 16px 0 0;
+        }
+
+        .params-section h3 {
+            color: #e6edf3;
+            margin-bottom: 30px;
+            font-size: 1.8em;
+            text-align: center;
+            font-weight: 600;
+            background: linear-gradient(135deg, #7877c6, #ff6ec7);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            padding-bottom: 10px;
+        }
+
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+        }
+
+        .param-group {
+            display: flex;
+            flex-direction: column;
+            background: white;
+            padding: 28px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .param-group label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 1.2em;
+        }
+
+        .param-group input, .param-group select {
+            padding: 16px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .param-group input:focus, .param-group select:focus {
+            border-color: #667eea;
+            outline: none;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .param-group small {
+            margin-top: 8px;
+            color: #666;
+            font-size: 0.85em;
+            font-style: italic;
+        }
+
+        .submit-section {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 50px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.4em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .nav-section {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #eee;
+        }
+
+        .nav-btn {
+            background: #6c757d;
+            color: white;
+            padding: 16px 32px;
+            border: none;
+            border-radius: 25px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0 12px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .nav-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .nav-btn:hover {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #28a745;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .file-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2.2em;
+            }
+        }
+
+        /* Optimisation pleine largeur pour grands écrans */
+        @media screen and (min-width: 1200px) {
+            .upload-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+            }
+            
+            .file-input-group {
+                padding: 20px;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+        }
+
+        @media screen and (min-width: 1600px) {
+            .upload-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2.8em;
+            }
+        }
+
+        /* Optimisation pour ultra-larges écrans */
+        @media screen and (min-width: 1920px) {
+            .upload-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            .content {
+                padding: 25px 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p>SothemaAL</p>
+        </div>
+
+        <div class="content">
+            {% if error %}
+            <div class="error">
+                <strong>Erreur:</strong> {{ error }}
+            </div>
+            {% endif %}
+
+            {% if output %}
+            <div class="success">
+                <strong>Résultat:</strong>
+                <pre>{{ output }}</pre>
+            </div>
+            {% endif %}
+
+            <div class="default-files-info">
+                <h3>📁 Fichiers par défaut utilisés</h3>
+                <p>Si vous ne téléchargez pas de fichiers, l'application utilisera automatiquement les fichiers suivants du projet:</p>
+                <div class="default-files-list">
+                    <div>• <strong>Besoins:</strong> besoins_non_lisse_x3.csv</div>
+                    <div>• <strong>Nomenclature:</strong> nomenclature_multi_niveaux.csv</div>
+                    <div>• <strong>Postes:</strong> posts.csv</div>
+                    <div>• <strong>Opérations:</strong> operations.csv</div>
+                    <div>• <strong>Indisponibilités:</strong> post_unavailability.csv</div>
+                </div>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data">
+                <div class="file-grid">
+                    <div class="file-input-group">
+                        <label for="besoins_file">📋 Fichier Besoins</label>
+                        <input type="file" id="besoins_file" name="besoins_file" class="file-input" accept=".csv">
+                        <small>Format: CSV (optionnel)</small>
+                    </div>
+
+                    <div class="file-input-group">
+                        <label for="nomenclature_file">🔗 Fichier Nomenclature</label>
+                        <input type="file" id="nomenclature_file" name="nomenclature_file" class="file-input" accept=".csv">
+                        <small>Format: CSV (optionnel)</small>
+                    </div>
+
+                    <div class="file-input-group">
+                        <label for="posts_file">🏭 Fichier Postes</label>
+                        <input type="file" id="posts_file" name="posts_file" class="file-input" accept=".csv">
+                        <small>Format: CSV (optionnel)</small>
+                    </div>
+
+                    <div class="file-input-group">
+                        <label for="operations_file">⚙️ Fichier Opérations</label>
+                        <input type="file" id="operations_file" name="operations_file" class="file-input" accept=".csv">
+                        <small>Format: CSV (optionnel)</small>
+                    </div>
+
+                    <div class="file-input-group">
+                        <label for="post_unavailability_file">❌ Fichier Indisponibilités</label>
+                        <input type="file" id="post_unavailability_file" name="post_unavailability_file" class="file-input" accept=".csv">
+                        <small>Format: CSV (optionnel)</small>
+                    </div>
+                </div>
+
+                <div class="params-section">
+                    <h3>⚙️ Paramètres de l'algorithme</h3>
+                    <div class="params-grid">
+                        <div class="param-group">
+                            <label for="retreat_weeks">📅 Semaines de recul:</label>
+                            <input type="number" id="retreat_weeks" name="retreat_weeks" value="0" min="0" max="52" placeholder="0">
+                            <small>Flexibilité temporelle pour la planification (0-52 semaines)</small>
+                        </div>
+                        <div class="param-group">
+                            <label for="auto_mode">🤖 Mode automatique:</label>
+                            <select id="auto_mode" name="auto_mode">
+                                <option value="True" selected>✅ Activé</option>
+                                <option value="False">❌ Désactivé</option>
+                            </select>
+                            <small>Optimisation automatique des paramètres</small>
+                        </div>
+                        <div class="param-group">
+                            <label for="horizon_weeks">🎯 Horizon temporel:</label>
+                            <input type="number" id="horizon_weeks" name="horizon_weeks" value="4" min="1" max="12" placeholder="4">
+                            <small>Durée de la fenêtre de groupement (1-12 semaines)</small>
+                        </div>
+                        <div class="param-group" style="grid-column: 1 / -1;">
+                            <label for="use_test_data" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="use_test_data" name="use_test_data" value="true" style="transform: scale(1.2);">
+                                🧪 Utiliser des données de test (BATENS Premium, Electronique, etc.)
+                            </label>
+                            <small style="color: #666; margin-left: 32px; display: block;">
+                                Cochée : Utilise des données d'exemple avec des produits électroniques BATENS<br>
+                                Non cochée : Utilise les données pharmaceutiques par défaut
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="submit-section">
+                    <button type="submit" class="submit-btn">🚀 Exécuter l'algorithme</button>
+                </div>
+            </form>
+
+            <div class="nav-section">
+                <a href="/display-output" class="nav-btn">📊 Voir les derniers résultats</a>
+                <a href="/data-visualization" class="nav-btn primary">📈 Visualisation des données</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Améliorer l'expérience utilisateur avec du drag & drop
+        document.querySelectorAll('.file-input-group').forEach(group => {
+            const input = group.querySelector('.file-input');
+            
+            group.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                group.style.borderColor = '#667eea';
+                group.style.background = '#f0f2ff';
+            });
+            
+            group.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                group.style.borderColor = '#dee2e6';
+                group.style.background = '#f8f9fa';
+            });
+            
+            group.addEventListener('drop', (e) => {
+                e.preventDefault();
+                group.style.borderColor = '#dee2e6';
+                group.style.background = '#f8f9fa';
+                
+                if (e.dataTransfer.files.length > 0) {
+                    input.files = e.dataTransfer.files;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

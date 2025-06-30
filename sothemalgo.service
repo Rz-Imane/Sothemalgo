@@ -1,0 +1,18 @@
+[Unit]
+Description=Sothemalgo Flask Application
+After=network.target
+
+[Service]
+Type=notify
+User=sothemalgo
+Group=sothemalgo
+WorkingDirectory=/opt/sothemalgo
+Environment=FLASK_ENV=production
+Environment=PYTHONPATH=/opt/sothemalgo
+ExecStart=/opt/sothemalgo/sothemalgo_env/bin/gunicorn --bind 127.0.0.1:5000 --workers 4 --timeout 300 --access-logfile /opt/sothemalgo/logs/access.log --error-logfile /opt/sothemalgo/logs/error.log sothemalgo_web:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

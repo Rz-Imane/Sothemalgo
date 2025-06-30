@@ -1,0 +1,8 @@
+PostID,PostName,DefaultCapacityHoursWeek
+PREP01,Préparation Type A,35
+PREP02,Préparation Type B,35
+PREP03,Préparation Type C,35
+ASSY01,Assemblage Principal,40
+ASSY02,Assemblage Secondaire,40
+CTRL01,Contrôle Qualité,30
+PACK01,Conditionnement,35

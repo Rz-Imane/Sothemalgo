@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SothemaAL - Résultats</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0a0a;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            position: relative;
+            overflow-x: hidden;
+            font-size: 26px;
+            line-height: 1.8;
+        }
+
+        /* GitHub Copilot-style optimized background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15), transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255, 110, 199, 0.15), transparent 50%);
+            animation: float 30s ease-in-out infinite;
+            pointer-events: none;
+            z-index: -1;
+            will-change: transform;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .container {
+            width: 98%;
+            max-width: none;
+            margin: 1% auto;
+            background: rgba(13, 17, 23, 0.90);
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            border-radius: 16px;
+            box-shadow: 0 0 20px rgba(120, 119, 198, 0.1);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+            min-height: 95vh;
+            position: relative;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.6), transparent);
+        }
+
+        .header {
+            background: linear-gradient(135deg, rgba(120, 119, 198, 0.1) 0%, rgba(255, 110, 199, 0.1) 100%);
+            border-bottom: 1px solid rgba(48, 54, 61, 0.8);
+            color: #e6edf3;
+            padding: 60px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.8), transparent);
+        }
+
+        .header h1 {
+            font-size: 4.2em;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #7877c6, #ff6ec7);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            text-shadow: 0 0 40px rgba(120, 119, 198, 0.4);
+            text-transform: uppercase;
+        }
+
+        .content {
+            padding: 60px;
+            background: transparent;
+            font-size: 26px;
+        }
+
+        .group-section {
+            margin-bottom: 60px;
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+            background: rgba(22, 27, 34, 0.8);
+            backdrop-filter: blur(5px);
+            position: relative;
+        }
+
+        .group-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.6), transparent);
+        }
+
+        .group-header {
+            background: linear-gradient(135deg, 
+                rgba(120, 119, 198, 0.15) 0%, 
+                rgba(255, 110, 199, 0.15) 50%,
+                rgba(168, 85, 247, 0.15) 100%);
+            border-bottom: 1px solid rgba(48, 54, 61, 0.8);
+            color: #f0f6fc;
+            padding: 40px;
+            position: relative;
+        }
+
+        .group-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.8), transparent);
+        }
+
+        .group-header h2 {
+            margin-bottom: 25px;
+            font-size: 2.8em;
+            font-weight: 700;
+            color: #22c55e;
+            text-shadow: 0 0 25px rgba(34, 197, 94, 0.5);
+            letter-spacing: -0.02em;
+        }
+
+        .group-info {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+            margin-top: 30px;
+        }
+
+        .group-info-item {
+            background: linear-gradient(135deg, 
+                rgba(0, 255, 135, 0.05) 0%, 
+                rgba(58, 123, 255, 0.05) 50%, 
+                rgba(147, 51, 234, 0.05) 100%);
+            border: 2px solid rgba(0, 255, 135, 0.2);
+            padding: 40px 50px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        .group-info-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #00ff87, #3a7bff, #9333ea);
+            opacity: 0.7;
+        }
+
+        .group-info-item:hover {
+            border-color: rgba(0, 255, 135, 0.4);
+            transform: translateY(-3px);
+            box-shadow: 0 0 40px rgba(0, 255, 135, 0.1);
+        }
+
+        .group-info-item strong {
+            display: block;
+            margin-bottom: 18px;
+            color: #00ff87;
+            font-size: 1.4em;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(0, 255, 135, 0.3);
+        }
+
+        .group-info-item span {
+            color: #ffffff;
+            font-size: 2em;
+            font-weight: 600;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+            display: block;
+            line-height: 1.2;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            background: rgba(13, 17, 23, 0.6);
+            border-radius: 0 0 20px 20px;
+            margin-top: 2px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 20px;
+            table-layout: fixed;
+            background: transparent;
+        }
+
+        th {
+            background: rgba(48, 54, 61, 0.8);
+            color: #f0f6fc;
+            font-weight: 700;
+            padding: 24px 20px;
+            text-align: left;
+            border-bottom: 2px solid rgba(59, 130, 246, 0.5);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-size: 1.1em;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            backdrop-filter: blur(15px);
+        }
+
+        th:first-child {
+            border-left: 3px solid rgba(34, 197, 94, 0.8);
+        }
+
+        td {
+            padding: 22px 20px;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+            vertical-align: top;
+            word-wrap: break-word;
+            color: #e6edf3;
+            background: transparent;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        tr:hover {
+            background-color: rgba(59, 130, 246, 0.08);
+            transform: scale(1.002);
+            transition: all 0.2s ease;
+        }
+
+        .product-row {
+            background-color: rgba(34, 197, 94, 0.12);
+            font-weight: 600;
+            color: #f0f6fc;
+            border-left: 3px solid rgba(34, 197, 94, 0.6);
+        }
+
+        .component-row {
+            background-color: rgba(168, 85, 247, 0.08);
+            font-style: italic;
+            color: #c9d1d9;
+            border-left: 3px solid rgba(168, 85, 247, 0.4);
+        }
+
+        .unassigned-section {
+            margin-top: 50px;
+        }
+
+        .unassigned-header {
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.2) 0%, rgba(238, 90, 36, 0.2) 100%);
+            color: #e6edf3;
+            padding: 32px;
+            border-radius: 16px 16px 0 0;
+            border: 1px solid rgba(48, 54, 61, 0.6);
+            border-bottom: none;
+            position: relative;
+        }
+
+        .unassigned-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 107, 107, 0.6), transparent);
+        }
+
+        .unassigned-header h2 {
+            color: #fb7185;
+            text-shadow: 0 0 10px rgba(251, 113, 133, 0.3);
+        }
+
+        .nav-buttons {
+            margin-bottom: 40px;
+            text-align: center;
+            padding: 32px;
+            background: rgba(22, 27, 34, 0.6);
+            border-radius: 16px;
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            backdrop-filter: blur(15px);
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 20px 40px;
+            margin: 0 16px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, 
+                rgba(34, 197, 94, 0.9) 0%, 
+                rgba(59, 130, 246, 0.9) 100%);
+            color: #ffffff;
+            border-color: rgba(34, 197, 94, 0.5);
+            box-shadow: 0 0 30px rgba(34, 197, 94, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 40px rgba(34, 197, 94, 0.4);
+            border-color: rgba(34, 197, 94, 0.8);
+        }
+
+        .btn-secondary {
+            background: rgba(48, 54, 61, 0.8);
+            color: #f0f6fc;
+            border-color: rgba(48, 54, 61, 1);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(48, 54, 61, 1);
+            transform: translateY(-2px);
+            color: #ffffff;
+            box-shadow: 0 8px 25px rgba(48, 54, 61, 0.5);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, 
+                rgba(59, 130, 246, 0.9) 0%, 
+                rgba(168, 85, 247, 0.9) 100%);
+            color: #ffffff;
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-info:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 40px rgba(59, 130, 246, 0.4);
+        }
+
+        .alert {
+            padding: 20px 24px;
+            margin-bottom: 30px;
+            border-radius: 12px;
+            border: 1px solid rgba(251, 113, 133, 0.3);
+            background: rgba(251, 113, 133, 0.1);
+            color: #fb7185;
+            backdrop-filter: blur(10px);
+            font-size: 1.1em;
+        }
+
+        .stats-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 30px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: rgba(22, 27, 34, 0.6);
+            border: 1px solid rgba(48, 54, 61, 0.6);
+            padding: 28px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            position: relative;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(120, 119, 198, 0.8), transparent);
+        }
+
+        .stat-number {
+            font-size: 2.8em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #7877c6, #ff6ec7);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .stat-label {
+            color: #8b949e;
+            margin-top: 8px;
+            font-size: 1.0em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 30px;
+            }
+            
+            .group-info {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 16px;
+            }
+            
+            th, td {
+                padding: 12px 8px;
+            }
+        }
+
+        /* Optimisation pleine largeur */
+        @media screen and (min-width: 1200px) {
+            .group-info {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            .table-container {
+                font-size: 18px;
+            }
+            
+            th, td {
+                padding: 20px 16px;
+                font-size: 18px;
+            }
+        }
+
+        @media screen and (min-width: 1600px) {
+            .group-info {
+                grid-template-columns: repeat(6, 1fr);
+            }
+            
+            th, td {
+                padding: 22px 20px;
+                font-size: 20px;
+            }
+        }
+
+        /* Largeurs de colonnes optimisées */
+        th:nth-child(1), td:nth-child(1) { width: 8%; } /* Produit */
+        th:nth-child(2), td:nth-child(2) { width: 15%; } /* Description */
+        th:nth-child(3), td:nth-child(3) { width: 8%; } /* Code */
+        th:nth-child(4), td:nth-child(4) { width: 4%; } /* FG */
+        th:nth-child(5), td:nth-child(5) { width: 4%; } /* CAT */
+        th:nth-child(6), td:nth-child(6) { width: 4%; } /* US */
+        th:nth-child(7), td:nth-child(7) { width: 4%; } /* FS */
+        th:nth-child(8), td:nth-child(8) { width: 6%; } /* Quantité */
+        th:nth-child(9), td:nth-child(9) { width: 10%; } /* Date */
+        th:nth-child(10), td:nth-child(10) { width: 8%; } /* Flag */
+        th:nth-child(11), td:nth-child(11) { width: 10%; } /* Date Début */
+        th:nth-child(12), td:nth-child(12) { width: 6%; } /* Délai */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div class="nav-buttons">
+                <a href="/" class="btn btn-primary">🏠 Accueil</a>
+                <a href="/display-output" class="btn btn-secondary">🔄 Actualiser</a>
+                <a href="/data-visualization" class="btn btn-info">📈 Visualisation</a>
+            </div>
+
+            {% if error %}
+                <div class="alert">
+                    <strong>❌ Erreur:</strong> {{ error }}
+                </div>
+            {% else %}
+                <!-- Statistics Overview -->
+                <div class="stats-overview">
+                    <div class="stat-card">
+                        <span class="stat-number">{{ groups|length }}</span>
+                        <div class="stat-label">Groupes Créés</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">
+                            {% set total_ofs = 0 %}
+                            {% for group in groups %}
+                                {% set total_ofs = total_ofs + group.ofs|length %}
+                            {% endfor %}
+                            {{ total_ofs }}
+                        </span>
+                        <div class="stat-label">OFs dans les Groupes</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number">{{ unassigned_ofs|length }}</span>
+                        <div class="stat-label">OFs Non Affectés</div>
+                    </div>
+                </div>
+
+                <!-- Groups -->
+                {% for group in groups %}
+                <div class="group-section">
+                    <div class="group-header">
+                        <h2>🎯 {{ group.id }}</h2>
+                        <div class="group-info">
+                            {% if group.ps_product %}
+                            <div class="group-info-item">
+                                <strong>Produit PS Principal:</strong>
+                                <span>{{ group.ps_product }}</span>
+                            </div>
+                            {% endif %}
+                            {% if group.time_window %}
+                            <div class="group-info-item">
+                                <strong>Fenêtre Temporelle:</strong>
+                                <span>{{ group.time_window }}</span>
+                            </div>
+                            {% endif %}
+                            {% if group.remaining_stock %}
+                            <div class="group-info-item">
+                                <strong>Stock PS Théorique Restant:</strong>
+                                <span>{{ group.remaining_stock }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if group.ofs %}
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Produit</th>
+                                    <th>Description</th>
+                                    <th>Code Commande</th>
+                                    <th>FG</th>
+                                    <th>CAT</th>
+                                    <th>US</th>
+                                    <th>FS</th>
+                                    <th>Quantité</th>
+                                    <th>Date X3</th>
+                                    <th>Flag Groupe</th>
+                                    <th>Date Début</th>
+                                    <th>Délai</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for of in group.ofs %}
+                                <tr class="{% if of.Part %}product-row{% else %}component-row{% endif %}">
+                                    <td>{{ of.Part }}</td>
+                                    <td>{{ of.Description }}</td>
+                                    <td>{{ of.Order_Code }}</td>
+                                    <td>{{ of.FG }}</td>
+                                    <td>{{ of.CAT }}</td>
+                                    <td>{{ of.US }}</td>
+                                    <td>{{ of.FS }}</td>
+                                    <td>{{ of.Qty }}</td>
+                                    <td>{{ of.X3_Date }}</td>
+                                    <td>{{ of.GRP_FLG }}</td>
+                                    <td>{{ of.Start_Date }}</td>
+                                    <td>{{ of.Delay }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <!-- Unassigned OFs -->
+                {% if unassigned_ofs %}
+                <div class="unassigned-section">
+                    <div class="group-section">
+                        <div class="unassigned-header">
+                            <h2>⚠️ OFs Non Affectés</h2>
+                            <p>Ordres de fabrication qui n'ont pas pu être intégrés dans un groupe</p>
+                        </div>
+                        
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Produit</th>
+                                        <th>Description</th>
+                                        <th>Code Commande</th>
+                                        <th>FG</th>
+                                        <th>CAT</th>
+                                        <th>US</th>
+                                        <th>FS</th>
+                                        <th>Quantité</th>
+                                        <th>Date X3</th>
+                                        <th>Flag Groupe</th>
+                                        <th>Date Début</th>
+                                        <th>Délai</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for of in unassigned_ofs %}
+                                    <tr>
+                                        <td>{{ of.Part }}</td>
+                                        <td>{{ of.Description }}</td>
+                                        <td>{{ of.Order_Code }}</td>
+                                        <td>{{ of.FG }}</td>
+                                        <td>{{ of.CAT }}</td>
+                                        <td>{{ of.US }}</td>
+                                        <td>{{ of.FS }}</td>
+                                        <td>{{ of.Qty }}</td>
+                                        <td>{{ of.X3_Date }}</td>
+                                        <td>{{ of.GRP_FLG }}</td>
+                                        <td>{{ of.Start_Date }}</td>
+                                        <td>{{ of.Delay }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if not groups and not unassigned_ofs %}
+                <div class="alert">
+                    <strong>ℹ️ Information:</strong> Aucune donnée à afficher. Veuillez exécuter l'algorithme Sothemalgo pour générer des résultats.
+                </div>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

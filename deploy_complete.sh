@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# Script de déploiement complet pour Sothemalgo sur Ubuntu Server
+# Usage: ./deploy_complete.sh
+
+set -e  # Arrêter en cas d'erreur
+
+APP_DIR="/opt/sothemalgo"
+APP_USER="sothemalgo"
+NGINX_SITE="sothemalgo"
+
+echo "=== Déploiement complet de Sothemalgo ==="
+
+# 1. Vérifier les prérequis
+echo "Vérification des prérequis..."
+if ! command -v python3 &> /dev/null; then
+    echo "Python3 n'est pas installé. Installation..."
+    sudo apt update
+    sudo apt install -y python3 python3-pip python3-venv
+fi
+
+if ! command -v nginx &> /dev/null; then
+    echo "Nginx n'est pas installé. Installation..."
+    sudo apt install -y nginx
+fi
+
+if ! command -v supervisorctl &> /dev/null; then
+    echo "Supervisor n'est pas installé. Installation..."
+    sudo apt install -y supervisor
+fi
+
+# 2. Créer l'utilisateur et les répertoires
+echo "Configuration de l'utilisateur et des répertoires..."
+sudo useradd -m -s /bin/bash $APP_USER 2>/dev/null || echo "Utilisateur $APP_USER existe déjà"
+sudo mkdir -p $APP_DIR
+sudo chown $APP_USER:$APP_USER $APP_DIR
+
+# 3. Installer Gunicorn dans requirements
+echo "Mise à jour des requirements pour la production..."
+if ! grep -q "gunicorn" requirements.txt; then
+    echo "gunicorn==21.2.0" >> requirements.txt
+fi
+
+# 4. Copier les fichiers (à adapter selon votre méthode)
+echo "Les fichiers doivent être copiés manuellement dans $APP_DIR"
+echo "Méthodes recommandées:"
+echo "  - Git: git clone https://github.com/your-repo/sothemalgo.git $APP_DIR"
+echo "  - SCP: scp -r /local/path/* user@server:$APP_DIR/"
+echo "  - RSYNC: rsync -av /local/path/ user@server:$APP_DIR/"
+
+# 5. Configuration de l'environnement Python
+echo "Configuration de l'environnement Python..."
+cd $APP_DIR
+sudo -u $APP_USER python3 -m venv sothemalgo_env
+sudo -u $APP_USER bash -c "source sothemalgo_env/bin/activate && pip install --upgrade pip"
+sudo -u $APP_USER bash -c "source sothemalgo_env/bin/activate && pip install -r requirements.txt"
+
+# 6. Créer les répertoires nécessaires
+sudo -u $APP_USER mkdir -p $APP_DIR/{logs,uploads,static,templates}
+
+# 7. Configuration Supervisor
+echo "Configuration de Supervisor..."
+sudo cp sothemalgo.conf /etc/supervisor/conf.d/
+sudo supervisorctl reread
+sudo supervisorctl update
+
+# 8. Configuration Nginx
+echo "Configuration de Nginx..."
+sudo cp nginx_sothemalgo.conf /etc/nginx/sites-available/$NGINX_SITE
+sudo ln -sf /etc/nginx/sites-available/$NGINX_SITE /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+
+# 9. Démarrage des services
+echo "Démarrage des services..."
+sudo supervisorctl start sothemalgo-gunicorn
+sudo systemctl enable nginx
+sudo systemctl enable supervisor
+
+# 10. Configuration du firewall (optionnel)
+echo "Configuration du firewall..."
+sudo ufw allow 22/tcp   # SSH
+sudo ufw allow 80/tcp   # HTTP
+sudo ufw allow 443/tcp  # HTTPS
+# sudo ufw --force enable  # Décommentez si vous voulez activer le firewall
+
+echo "=== Déploiement terminé ==="
+echo "Application accessible sur: http://YOUR_SERVER_IP"
+echo "Logs disponibles dans: $APP_DIR/logs/"
+echo "Commandes utiles:"
+echo "  sudo supervisorctl status"
+echo "  sudo supervisorctl restart sothemalgo-gunicorn"
+echo "  sudo tail -f $APP_DIR/logs/gunicorn.log"

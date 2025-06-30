@@ -1,0 +1,149 @@
+Part	Description	Order Code	FG	CAT	US	FS	Qty	X3 Date	GRP_FLG	Start Date	Delay
+
+# Group ID: GRP1
+#   Produit PS Principal: PS002
+#   Fenêtre Temporelle: 2024-06-24 à 2024-07-21
+#   Stock PS Théorique Restant: 2280.00
+#   Stock PF001 Restant: 50.00
+#   Stock SF001 Restant: -100.00
+#   Stock SF002 Restant: -50.00
+#   Stock PS001 Restant: 800.00
+#   Stock PS002 Restant: 800.00
+#   Stock PS003 Restant: 775.00
+#   Stock PS004 Restant: 925.00
+#   Stock PS005 Restant: 310.00
+#   OFs dans ce Groupe:
+PF001	BATENS PREMIUM	OF240601	A	3	1	1	50	2024-06-15	1	2024-06-24	9
+PS001	Processeur Central	OF240605	E	0	1	1	200	2024-06-25	1	2024-06-24	0
+PS004	Régulateur Tension	OF240606B	F2	0	1	1	150	2024-06-27	1	2024-06-24	0
+PS002	Capteur Température	OF240606	F	0	1	1	300	2024-06-28	1	2024-06-24	0
+PS001	Processeur Central	OF240607A	E2	0	1	1	300	2024-06-29	1	2024-06-24	0
+PS003	Micro-contrôleur WiFi	OF240609	I	0	1	1	250	2024-07-05	1	2024-06-24	0
+PS004	Régulateur Tension	OF240612	L	0	1	1	400	2024-07-12	1	2024-06-24	0
+PS003	Micro-contrôleur WiFi	OF240612B	I2	0	1	1	200	2024-07-13	1	2024-06-24	0
+PS005	Antenne Ceramic	OF240615	O	0	1	1	180	2024-07-20	1	2024-07-01	0
+PS002	Capteur Température	OF240615B	F3	0	1	1	250	2024-07-21	1	2024-07-01	0
+
+# Group ID: GRP10
+#   Produit PS Principal: PS_GROUP_10
+#   Fenêtre Temporelle: 2024-07-08 à 2024-08-04
+#   Stock PS Théorique Restant: 120.00
+#   Stock SF004 Restant: -120.00
+#   Stock PS002 Restant: -120.00
+#   Stock PS003 Restant: -60.00
+#   Stock PS004 Restant: -240.00
+#   Stock PS005 Restant: -60.00
+#   OFs dans ce Groupe:
+SF004	Alimentation Intelligente	OF240611	K	1	1	1	120	2024-07-10	10	2024-07-08	0
+
+# Group ID: GRP2
+#   Produit PS Principal: PS006
+#   Fenêtre Temporelle: 2024-07-01 à 2024-07-28
+#   Stock PS Théorique Restant: 205.00
+#   Stock PF003 Restant: 25.00
+#   Stock SF001 Restant: -25.00
+#   Stock PS001 Restant: -87.50
+#   Stock PS002 Restant: -62.50
+#   Stock PS003 Restant: -50.00
+#   Stock PS004 Restant: -37.50
+#   Stock SF003 Restant: -25.00
+#   Stock PS005 Restant: -37.50
+#   Stock PS006 Restant: 297.50
+#   OFs dans ce Groupe:
+PF003	BATENS DELUXE	OF240607	G	3	1	1	25	2024-07-01	2	2024-07-01	0
+PS006	Driver LED	OF240609B	R1	0	1	1	180	2024-07-06	2	2024-07-01	0
+
+# Group ID: GRP3
+#   Produit PS Principal: PS_GROUP_3
+#   Fenêtre Temporelle: 2024-07-15 à 2024-08-11
+#   Stock PS Théorique Restant: 40.00
+#   Stock PF005 Restant: 40.00
+#   Stock SF001 Restant: -80.00
+#   Stock PS001 Restant: -140.00
+#   Stock PS002 Restant: -160.00
+#   Stock PS003 Restant: -120.00
+#   Stock PS004 Restant: -60.00
+#   Stock PS005 Restant: -120.00
+#   Stock PS006 Restant: -20.00
+#   Stock SF005 Restant: -40.00
+#   OFs dans ce Groupe:
+PF005	BATENS INDUSTRIAL	OF240613	M	3	1	1	40	2024-07-15	3	2024-07-15	0
+
+# Group ID: GRP4
+#   Produit PS Principal: PS_GROUP_4
+#   Fenêtre Temporelle: 2024-06-17 à 2024-07-14
+#   Stock PS Théorique Restant: 75.00
+#   Stock PF002 Restant: 75.00
+#   Stock SF002 Restant: -75.00
+#   Stock PS001 Restant: -150.00
+#   Stock PS002 Restant: -375.00
+#   Stock PS003 Restant: -75.00
+#   Stock PS004 Restant: -150.00
+#   OFs dans ce Groupe:
+PF002	BATENS STANDARD	OF240602	B	2	1	1	75	2024-06-18	4	2024-06-17	0
+
+# Group ID: GRP5
+#   Produit PS Principal: PS_GROUP_5
+#   Fenêtre Temporelle: 2024-06-17 à 2024-07-14
+#   Stock PS Théorique Restant: 100.00
+#   Stock SF001 Restant: -100.00
+#   Stock PS001 Restant: -100.00
+#   Stock PS002 Restant: -100.00
+#   Stock PS003 Restant: -100.00
+#   Stock PS004 Restant: -50.00
+#   Stock PS005 Restant: -50.00
+#   OFs dans ce Groupe:
+SF001	Sous-Ensemble Electronique	OF240603	C	2	1	1	100	2024-06-20	5	2024-06-17	0
+
+# Group ID: GRP6
+#   Produit PS Principal: PS_GROUP_6
+#   Fenêtre Temporelle: 2024-07-01 à 2024-07-28
+#   Stock PS Théorique Restant: 80.00
+#   Stock SF003 Restant: -80.00
+#   Stock PS001 Restant: -40.00
+#   Stock PS002 Restant: -40.00
+#   Stock PS003 Restant: -80.00
+#   Stock PS004 Restant: -80.00
+#   Stock PS006 Restant: -160.00
+#   OFs dans ce Groupe:
+SF003	Interface Utilisateur	OF240608	H	2	1	1	80	2024-07-03	6	2024-07-01	0
+
+# Group ID: GRP7
+#   Produit PS Principal: PS_GROUP_7
+#   Fenêtre Temporelle: 2024-07-08 à 2024-08-04
+#   Stock PS Théorique Restant: 60.00
+#   Stock PF004 Restant: 60.00
+#   Stock PS001 Restant: -60.00
+#   Stock PS002 Restant: -90.00
+#   Stock PS003 Restant: -60.00
+#   Stock PS004 Restant: -180.00
+#   Stock PS005 Restant: -30.00
+#   Stock SF004 Restant: -60.00
+#   OFs dans ce Groupe:
+PF004	BATENS COMPACT	OF240610	J	2	1	1	60	2024-07-08	7	2024-07-08	0
+
+# Group ID: GRP8
+#   Produit PS Principal: PS_GROUP_8
+#   Fenêtre Temporelle: 2024-07-15 à 2024-08-11
+#   Stock PS Théorique Restant: 90.00
+#   Stock SF005 Restant: -90.00
+#   Stock PS001 Restant: -45.00
+#   Stock PS002 Restant: -90.00
+#   Stock PS003 Restant: -90.00
+#   Stock PS004 Restant: -45.00
+#   Stock PS005 Restant: -90.00
+#   OFs dans ce Groupe:
+SF005	Module Communication	OF240614	N	2	1	1	90	2024-07-18	8	2024-07-15	0
+
+# Group ID: GRP9
+#   Produit PS Principal: PS_GROUP_9
+#   Fenêtre Temporelle: 2024-06-17 à 2024-07-14
+#   Stock PS Théorique Restant: 150.00
+#   Stock SF002 Restant: -150.00
+#   Stock PS001 Restant: -150.00
+#   Stock PS002 Restant: -450.00
+#   Stock PS003 Restant: -75.00
+#   Stock PS004 Restant: -300.00
+#   OFs dans ce Groupe:
+SF002	Carte Circuit	OF240604	D	1	1	1	150	2024-06-22	9	2024-06-17	0
+\n# OFs Non Affectés (pas dans un groupe ou non planifiés avec un groupe):\n

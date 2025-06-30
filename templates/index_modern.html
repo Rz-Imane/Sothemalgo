@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SothemaAL - Algorithme de Groupement et Planification</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    
+    <!-- Font Awesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root {
+            /* Variables CSS pour un thème cohérent */
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --secondary-color: #64748b;
+            --accent-color: #06b6d4;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            
+            /* Couleurs sombres */
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border-color: #475569;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            
+            /* Animations */
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #1e293b 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Header professionnel */
+        .header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            box-shadow: var(--shadow);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .theme-toggle {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .theme-toggle:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        /* Container principal */
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        /* Hero section */
+        .hero {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .hero h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Card moderne */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        /* Section de configuration */
+        .config-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            margin-left: auto;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-input);
+            transition: var(--transition);
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: var(--transition);
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        /* Groupes de fichiers */
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .file-group {
+            background: var(--bg-input);
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-group:hover {
+            border-color: var(--primary-color);
+            background: rgba(37, 99, 235, 0.1);
+        }
+
+        .file-group.dragover {
+            border-color: var(--success-color);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .file-group-icon {
+            font-size: 2.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .file-group:hover .file-group-icon {
+            color: var(--primary-color);
+        }
+
+        .file-group-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-group-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .file-input {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-status {
+            display: none;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .file-status.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success-color);
+            border: 1px solid var(--success-color);
+        }
+
+        /* Paramètres */
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .param-group {
+            background: var(--bg-input);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .param-label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .param-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .param-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        /* Boutons */
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        /* Loading spinner */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Tooltips */
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            text-align: center;
+            border-radius: 6px;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+            }
+            
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .file-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .params-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+
+        /* Améliorations visuelles */
+        .gradient-border {
+            position: relative;
+            background: var(--bg-card);
+            border-radius: 16px;
+        }
+
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            border-radius: inherit;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+        }
+
+        .info-banner {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid var(--accent-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .info-banner i {
+            color: var(--accent-color);
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <span class="logo-text">SothemaAL</span>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Container principal -->
+    <div class="container">
+        <!-- Hero Section -->
+        <div class="hero">
+            <h1>Algorithme de Groupement et Planification</h1>
+            <p>Solution professionnelle pour l'optimisation de la production industrielle avec gestion multiniveau et stocks détaillés</p>
+        </div>
+
+        <!-- Information Banner -->
+        <div class="info-banner">
+            <i class="fas fa-info-circle"></i>
+            <div>
+                <strong>Mode de fonctionnement :</strong> 
+                Par défaut, l'application utilise les fichiers client (test_*_client.csv) dans uploads/. 
+                Cochez "Utiliser les données de test intégrées" pour utiliser les données complètes de test, 
+                ou uploadez vos propres fichiers CSV pour un traitement personnalisé.
+            </div>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" id="analysisForm">
+            <input type="hidden" name="action" value="run_algorithm">
+            <!-- Configuration principale -->
+            <div class="card gradient-border">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fas fa-sliders-h"></i>
+                    </div>
+                    <h2 class="card-title">Configuration de l'analyse</h2>
+                </div>
+
+                <!-- Mode données test -->
+                <div class="config-section">
+                    <div class="section-title">
+                        <i class="fas fa-flask"></i>
+                        Utiliser les données de test intégrées
+                        <div class="tooltip">
+                            <i class="fas fa-question-circle" style="color: var(--text-secondary); margin-left: 8px;"></i>
+                            <span class="tooltiptext">Active l'utilisation des fichiers de test pré-configurés pour une démonstration rapide</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="use_test_data" value="true" id="useTestData">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Upload des fichiers -->
+                <div class="config-section" id="fileUploadSection">
+                    <div class="section-title">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        Fichiers de données
+                    </div>
+                    
+                    <div class="file-grid">
+                        <div class="file-group" onclick="document.getElementById('besoins_file').click()">
+                            <div class="file-group-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="file-group-title">Besoins</div>
+                            <div class="file-group-desc">Fichier des besoins de production (CSV)</div>
+                            <input type="file" name="besoins_file" id="besoins_file" class="file-input" accept=".csv" onchange="handleFileSelect(this, 'besoins')">
+                            <div class="file-status" id="besoins-status"></div>
+                        </div>
+
+                        <div class="file-group" onclick="document.getElementById('nomenclature_file').click()">
+                            <div class="file-group-icon">
+                                <i class="fas fa-sitemap"></i>
+                            </div>
+                            <div class="file-group-title">Nomenclature</div>
+                            <div class="file-group-desc">Structure multiniveau des produits (CSV)</div>
+                            <input type="file" name="nomenclature_file" id="nomenclature_file" class="file-input" accept=".csv" onchange="handleFileSelect(this, 'nomenclature')">
+                            <div class="file-status" id="nomenclature-status"></div>
+                        </div>
+
+                        <div class="file-group" onclick="document.getElementById('posts_file').click()">
+                            <div class="file-group-icon">
+                                <i class="fas fa-industry"></i>
+                            </div>
+                            <div class="file-group-title">Postes</div>
+                            <div class="file-group-desc">Configuration des postes de production (CSV)</div>
+                            <input type="file" name="posts_file" id="posts_file" class="file-input" accept=".csv" onchange="handleFileSelect(this, 'posts')">
+                            <div class="file-status" id="posts-status"></div>
+                        </div>
+
+                        <div class="file-group" onclick="document.getElementById('operations_file').click()">
+                            <div class="file-group-icon">
+                                <i class="fas fa-tasks"></i>
+                            </div>
+                            <div class="file-group-title">Opérations</div>
+                            <div class="file-group-desc">Définition des opérations de production (CSV)</div>
+                            <input type="file" name="operations_file" id="operations_file" class="file-input" accept=".csv" onchange="handleFileSelect(this, 'operations')">
+                            <div class="file-status" id="operations-status"></div>
+                        </div>
+
+                        <div class="file-group" onclick="document.getElementById('post_unavailability_file').click()">
+                            <div class="file-group-icon">
+                                <i class="fas fa-calendar-times"></i>
+                            </div>
+                            <div class="file-group-title">Indisponibilités</div>
+                            <div class="file-group-desc">Périodes d'indisponibilité des postes (CSV)</div>
+                            <input type="file" name="post_unavailability_file" id="post_unavailability_file" class="file-input" accept=".csv" onchange="handleFileSelect(this, 'post_unavailability')">
+                            <div class="file-status" id="post_unavailability-status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paramètres d'algorithme -->
+                <div class="config-section">
+                    <div class="section-title">
+                        <i class="fas fa-cog"></i>
+                        Paramètres d'algorithme
+                    </div>
+                    
+                    <div class="params-grid">
+                        <div class="param-group">
+                            <label class="param-label" for="horizon_weeks">
+                                Horizon de planification (semaines)
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Nombre de semaines à considérer pour la planification (défaut: 12)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="horizon_weeks" id="horizon_weeks" class="param-input" value="12" min="1" max="52">
+                        </div>
+
+                        <div class="param-group">
+                            <label class="param-label" for="max_lot_size">
+                                Taille de lot maximum
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Taille maximum d'un lot de production (défaut: 10000)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="max_lot_size" id="max_lot_size" class="param-input" value="10000" min="1">
+                        </div>
+
+                        <div class="param-group">
+                            <label class="param-label" for="premix_window">
+                                Fenêtre Premix (heures)
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Durée de la fenêtre temporelle pour les produits Premix (défaut: 8)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="premix_window" id="premix_window" class="param-input" value="8" min="1" max="24">
+                        </div>
+
+                        <div class="param-group">
+                            <label class="param-label" for="grouping_threshold">
+                                Seuil de groupement
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Seuil minimum pour regrouper des ordres de fabrication (défaut: 0.8)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="grouping_threshold" id="grouping_threshold" class="param-input" value="0.8" min="0" max="1" step="0.1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary" id="runAnalysis" 
+                            onclick="handleSubmit(event)" 
+                            style="cursor: pointer; pointer-events: auto; position: relative; z-index: 10;">
+                        <i class="fas fa-play"></i>
+                        Lancer l'analyse
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                        <i class="fas fa-undo"></i>
+                        Réinitialiser
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="testSubmit()" style="background: #f59e0b;">
+                        <i class="fas fa-bug"></i>
+                        Test Debug
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Section de chargement -->
+        <div class="loading" id="loadingSection">
+            <div class="spinner"></div>
+            <h3>Traitement en cours...</h3>
+            <p>L'algorithme analyse vos données et génère les groupements optimaux.</p>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let isDarkMode = true;
+
+        // Toggle du thème
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            // Ici on pourrait implémenter un vrai toggle de thème
+            // Pour l'instant on garde le thème sombre
+        }
+
+        // Gestion des fichiers
+        function handleFileSelect(input, type) {
+            const status = document.getElementById(type + '-status');
+            
+            if (input.files.length > 0) {
+                const file = input.files[0];
+                status.textContent = `✓ ${file.name} sélectionné`;
+                status.className = 'file-status success';
+                status.style.display = 'block';
+            } else {
+                status.style.display = 'none';
+            }
+        }
+
+        // Gestion du mode test data
+        document.getElementById('useTestData').addEventListener('change', function() {
+            const fileSection = document.getElementById('fileUploadSection');
+            if (this.checked) {
+                fileSection.style.opacity = '0.5';
+                fileSection.style.pointerEvents = 'none';
+            } else {
+                fileSection.style.opacity = '1';
+                fileSection.style.pointerEvents = 'auto';
+            }
+        });
+
+        // Gestion du formulaire - Version simplifiée
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM chargé - version simplifiée');
+            
+            // Ne plus ajouter de gestionnaire submit automatique
+            // Le onclick du bouton gère tout
+            
+            const form = document.getElementById('analysisForm');
+            const loadingSection = document.getElementById('loadingSection');
+            
+            console.log('Éléments trouvés - Form:', !!form, 'Loading:', !!loadingSection);
+        });
+
+        // Fonction de gestion directe du submit
+        function handleSubmit(event) {
+            console.log('handleSubmit appelé');
+            
+            const loadingSection = document.getElementById('loadingSection');
+            const form = document.getElementById('analysisForm');
+            
+            if (loadingSection && form) {
+                // Afficher la section de chargement
+                loadingSection.style.display = 'block';
+                form.style.display = 'none';
+                
+                console.log('Loading affiché, formulaire masqué');
+                
+                // Permettre la soumission normale du formulaire
+                return true;
+            } else {
+                console.error('Éléments manquants - loading:', !!loadingSection, 'form:', !!form);
+                alert('Erreur technique - éléments manquants');
+                return false;
+            }
+        }
+
+        // Fonction de test debug
+        function testSubmit() {
+            console.log('Test debug activé');
+            alert('Test debug : cliquez OK pour simuler la soumission');
+            
+            const form = document.getElementById('analysisForm');
+            if (form) {
+                console.log('Formulaire trouvé - test de soumission');
+                alert('Formulaire trouvé - soumission en cours...');
+                form.submit();
+            } else {
+                alert('ERREUR : Formulaire non trouvé !');
+            }
+        }
+
+        // Réinitialiser le formulaire
+        function resetForm() {
+            document.getElementById('analysisForm').reset();
+            
+            // Masquer tous les statuts de fichiers
+            const statuses = document.querySelectorAll('.file-status');
+            statuses.forEach(status => {
+                status.style.display = 'none';
+            });
+            
+            // Réactiver la section de fichiers
+            const fileSection = document.getElementById('fileUploadSection');
+            fileSection.style.opacity = '1';
+            fileSection.style.pointerEvents = 'auto';
+        }
+
+        // Drag & Drop pour les fichiers
+        document.querySelectorAll('.file-group').forEach(group => {
+            group.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+            
+            group.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+            });
+            
+            group.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const input = this.querySelector('.file-input');
+                    input.files = files;
+                    
+                    // Déclencher l'événement change
+                    const event = new Event('change', { bubbles: true });
+                    input.dispatchEvent(event);
+                }
+            });
+        });
+
+        // Animation d'entrée
+        window.addEventListener('load', function() {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                    
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, 100);
+                }, index * 200);
+            });
+        });
+    </script>
+</body>
+</html>

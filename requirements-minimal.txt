@@ -1,0 +1,6 @@
+# Dépendances minimales pour exécuter l'algorithme Sothemalgo
+# (sans interface web)
+numpy>=1.20.0
+pandas>=2.0.0
+python-dateutil>=2.8.0
+pytz>=2021.1

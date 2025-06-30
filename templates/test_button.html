@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bouton Sothemalgo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 2rem;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0.5rem;
+        }
+        .btn:hover {
+            background: #1d4ed8;
+        }
+        .form-group {
+            margin: 1rem 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        input[type="checkbox"] {
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Test Interface Sothemalgo</h1>
+        
+        <form method="POST" action="/" enctype="multipart/form-data" id="testForm">
+            <input type="hidden" name="action" value="run_algorithm">
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="useTestData" value="on" checked>
+                    Utiliser les données de test
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label for="horizon_weeks">Horizon (semaines) :</label>
+                <input type="number" name="horizon_weeks" id="horizon_weeks" value="12" min="1" max="52">
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn" id="submitBtn" onclick="testClick(event)">
+                    🚀 Lancer l'analyse (Version Test)
+                </button>
+                
+                <button type="button" class="btn" onclick="alert('Bouton cliquable !')">
+                    ✅ Test Clique
+                </button>
+                
+                <button type="button" class="btn" onclick="manualSubmit()">
+                    📤 Submit Manuel
+                </button>
+            </div>
+        </form>
+        
+        <div id="results" style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
+            <h3>🔄 Traitement en cours...</h3>
+            <p>L'analyse va démarrer...</p>
+        </div>
+        
+        <div style="margin-top: 2rem; font-size: 0.9rem; color: #666;">
+            <h3>🔍 Diagnostic :</h3>
+            <ul>
+                <li>Si "Test Clique" fonctionne → Problème JavaScript interface principale</li>
+                <li>Si "Submit Manuel" fonctionne → Problème gestionnaire submit</li>
+                <li>Si "Lancer l'analyse" fonctionne → Interface principale à corriger</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function testClick(event) {
+            console.log('testClick appelé');
+            alert('Bouton cliqué ! Soumission en cours...');
+            
+            document.getElementById('results').style.display = 'block';
+            
+            // Permettre la soumission
+            return true;
+        }
+        
+        function manualSubmit() {
+            console.log('manualSubmit appelé');
+            const form = document.getElementById('testForm');
+            if (form) {
+                alert('Soumission manuelle du formulaire...');
+                form.submit();
+            } else {
+                alert('ERREUR : Formulaire non trouvé');
+            }
+        }
+        
+        // Test au chargement
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page de test chargée');
+            console.log('Formulaire trouvé:', !!document.getElementById('testForm'));
+            console.log('Bouton submit trouvé:', !!document.getElementById('submitBtn'));
+        });
+    </script>
+</body>
+</html>
