@@ -24,18 +24,6 @@ PS003	Micro-contrôleur WiFi	OF240612B	I2	0	1	1	200	2024-07-13	1	2024-06-24	0
 PS005	Antenne Ceramic	OF240615	O	0	1	1	180	2024-07-20	1	2024-07-01	0
 PS002	Capteur Température	OF240615B	F3	0	1	1	250	2024-07-21	1	2024-07-01	0
 
-# Group ID: GRP10
-#   Produit PS Principal: PS_GROUP_10
-#   Fenêtre Temporelle: 2024-07-08 à 2024-08-04
-#   Stock PS Théorique Restant: 120.00
-#   Stock SF004 Restant: -120.00
-#   Stock PS002 Restant: -120.00
-#   Stock PS003 Restant: -60.00
-#   Stock PS004 Restant: -240.00
-#   Stock PS005 Restant: -60.00
-#   OFs dans ce Groupe:
-SF004	Alimentation Intelligente	OF240611	K	1	1	1	120	2024-07-10	10	2024-07-08	0
-
 # Group ID: GRP2
 #   Produit PS Principal: PS006
 #   Fenêtre Temporelle: 2024-07-01 à 2024-07-28
@@ -146,4 +134,16 @@ SF005	Module Communication	OF240614	N	2	1	1	90	2024-07-18	8	2024-07-15	0
 #   Stock PS004 Restant: -300.00
 #   OFs dans ce Groupe:
 SF002	Carte Circuit	OF240604	D	1	1	1	150	2024-06-22	9	2024-06-17	0
+
+# Group ID: GRP10
+#   Produit PS Principal: PS_GROUP_10
+#   Fenêtre Temporelle: 2024-07-08 à 2024-08-04
+#   Stock PS Théorique Restant: 120.00
+#   Stock SF004 Restant: -120.00
+#   Stock PS002 Restant: -120.00
+#   Stock PS003 Restant: -60.00
+#   Stock PS004 Restant: -240.00
+#   Stock PS005 Restant: -60.00
+#   OFs dans ce Groupe:
+SF004	Alimentation Intelligente	OF240611	K	1	1	1	120	2024-07-10	10	2024-07-08	0
 \n# OFs Non Affectés (pas dans un groupe ou non planifiés avec un groupe):\n

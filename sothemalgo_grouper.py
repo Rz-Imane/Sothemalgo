@@ -890,7 +890,14 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
         # First, write OFs that are part of groups
         processed_of_ids_in_groups = set()
         all_component_stocks_summary = {}  # Pour le résumé global
-        for group in sorted(grouped_list_data, key=lambda g: g.id): # Sort groups for consistent output
+        # Sort groups numerically by ID (GRP1, GRP2, GRP3, ..., GRP10)
+        def extract_group_number(group):
+            try:
+                return int(group.id.replace("GRP", ""))
+            except:
+                return 0
+        
+        for group in sorted(grouped_list_data, key=extract_group_number): # Sort groups numerically
             f.write(f"\n# Group ID: {group.id}\n")
             f.write(f"#   Produit PS Principal: {group.ps_product_id}\n")
             f.write(f"#   Fenêtre Temporelle: {group.time_window_start.strftime('%Y-%m-%d')} à {group.time_window_end.strftime('%Y-%m-%d')}\n")
