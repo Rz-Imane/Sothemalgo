@@ -86,7 +86,7 @@ sudo ufw allow 443/tcp  # HTTPS
 # sudo ufw --force enable  # Décommentez si vous voulez activer le firewall
 
 echo "=== Déploiement terminé ==="
-echo "Application accessible sur: http://YOUR_SERVER_IP"
+echo "Application accessible sur: http://46.4.63.121"
 echo "Logs disponibles dans: $APP_DIR/logs/"
 echo "Commandes utiles:"
 echo "  sudo supervisorctl status"

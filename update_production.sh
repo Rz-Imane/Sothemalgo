@@ -39,5 +39,5 @@ sudo supervisorctl restart sothemalgo-gunicorn
 sudo systemctl reload nginx
 
 echo "=== Mise à jour terminée ==="
-echo "Application accessible sur: http://$(hostname -I | awk '{print $1}')"
+echo "Application accessible sur: http://46.4.63.121"
 echo "Vérifiez les logs: sudo tail -f $APP_DIR/logs/gunicorn.log"
