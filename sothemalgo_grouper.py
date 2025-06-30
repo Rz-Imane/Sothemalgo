@@ -437,6 +437,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
                 print(f"  Added Premix OF {ps_of.id} ({ps_of.product_id}) to {current_group.id}. Stock {ps_of.product_id}: {current_group.component_stocks[ps_of.product_id]}")
 
         # Ajouter d'autres OFs PF/SF compatibles dans la même fenêtre
+        # IMPORTANT: D'abord identifier tous les OFs de la même famille puis les ajouter tous
         other_client_ofs = [
             of for of in all_ofs 
             if of.product_type in ["PF", "SF"] and 
@@ -445,6 +446,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
                window_start_date_monday <= of.need_date <= window_end_date
         ]
         
+        # Stratégie révisée: grouper par famille de produits (partage les mêmes composants PS)
         for client_of in sorted(other_client_ofs, key=lambda o: o.need_date):
             # Calculer les besoins pour cet OF
             client_needed_components = {}
@@ -453,20 +455,28 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
                 if qty_needed > 0:
                     client_needed_components[bom_entry.child_product_id] = qty_needed * client_of.quantity
             
-            # Vérifier si tous les composants sont disponibles
-            can_add = True
-            for comp_id, qty_needed in client_needed_components.items():
-                current_stock = current_group.component_stocks.get(comp_id, 0)
-                if current_stock < qty_needed:
-                    can_add = False
+            # Vérifier si cet OF appartient à la même famille (utilise les mêmes PS)
+            same_family = False
+            for comp_id in client_needed_components.keys():
+                if comp_id in needed_components:
+                    same_family = True
                     break
             
-            if can_add:
-                # Ajouter l'OF et décrémenter les stocks
+            if same_family:
+                # Ajouter l'OF à la même famille (il pourrait contribuer au stock)
                 current_group.add_of(client_of, ps_quantity_change=0)
+                
+                # Si c'est un SF, il contribue au stock
+                if client_of.product_type == "SF":
+                    current_group.component_stocks[client_of.product_id] += client_of.quantity
+                
+                # Décrémenter les besoins en composants
                 for comp_id, qty_needed in client_needed_components.items():
+                    if comp_id not in current_group.component_stocks:
+                        current_group.component_stocks[comp_id] = 0
                     current_group.component_stocks[comp_id] -= qty_needed
-                print(f"  Added client OF {client_of.id} to {current_group.id}. Updated component stocks.")
+                    
+                print(f"  Added family OF {client_of.id} ({client_of.product_type}) to {current_group.id}. Updated component stocks.")
             else:
                 print(f"  Skipped client OF {client_of.id} - insufficient component stocks in {current_group.id}")
         

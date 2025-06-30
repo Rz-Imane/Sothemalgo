@@ -487,7 +487,13 @@ def test_button():
 
 if __name__ == '__main__':
     # Utiliser waitress comme serveur de production simple et multi-plateforme
-    # Pour un déploiement plus robuste sur Linux, Gunicorn est recommandé.
-    # Exemple avec Gunicorn : gunicorn --workers 4 --bind 0.0.0.0:8000 sothemalgo_web:app
-    from waitress import serve
-    serve(app, host="0.0.0.0", port=5002)
+    # Mode développement local - plus simple à démarrer
+    print("🚀 Démarrage de l'interface web Sothemalgo...")
+    print("📊 Algorithme avec logique de groupement par famille améliorée")
+    print("🌐 Interface accessible sur : http://localhost:5000")
+    print("⏹️  Appuyez sur Ctrl+C pour arrêter")
+    app.run(host="127.0.0.1", port=5000, debug=True)
+    
+    # Pour production avec Waitress (décommentez si nécessaire) :
+    # from waitress import serve
+    # serve(app, host="0.0.0.0", port=5002)
