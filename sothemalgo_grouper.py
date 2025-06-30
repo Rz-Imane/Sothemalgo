@@ -377,18 +377,30 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
             if qty_needed > 0:
                 needed_components[bom_entry.child_product_id] = qty_needed * base_client_of.quantity
         
-        # Identifier le PS principal (Premix) - celui avec le plus gros besoin
+        # Identifier le PS principal (Premix) en privilégiant celui avec la date la plus tôt
+        # et en respectant la hiérarchie de la nomenclature
         main_premix = None
-        max_qty = 0
+        earliest_premix_date = None
         premix_date = None
+        
+        # D'abord, essayer de trouver le PS qui a la date la plus proche du besoin client
+        best_premix_candidate = None
+        best_date_diff = float('inf')
+        
         for comp_id, qty in needed_components.items():
             # Chercher un OF PS correspondant pour obtenir sa date
             ps_ofs = [of for of in all_ofs if of.product_id == comp_id and of.product_type == "PS" and of.assigned_group_id is None]
-            if ps_ofs and qty > max_qty:
-                max_qty = qty
-                main_premix = comp_id
-                # Utiliser la date du premix le plus proche du besoin client
-                premix_date = min(ps_ofs, key=lambda x: abs((x.need_date - base_client_of.need_date).days)).need_date
+            if ps_ofs:
+                # Trouver le PS avec la date la plus proche de la date de besoin du client
+                closest_ps = min(ps_ofs, key=lambda x: abs((x.need_date - base_client_of.need_date).days))
+                date_diff = abs((closest_ps.need_date - base_client_of.need_date).days)
+                
+                if date_diff < best_date_diff:
+                    best_date_diff = date_diff
+                    best_premix_candidate = comp_id
+                    premix_date = closest_ps.need_date
+        
+        main_premix = best_premix_candidate
         
         if not main_premix or not premix_date:
             # Fallback : utiliser la date du client et créer un PS fictif
@@ -902,9 +914,30 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             f.write(f"#   Produit PS Principal: {group.ps_product_id}\n")
             f.write(f"#   Fenêtre Temporelle: {group.time_window_start.strftime('%Y-%m-%d')} à {group.time_window_end.strftime('%Y-%m-%d')}\n")
             f.write(f"#   Stock PS Théorique Restant: {group.current_ps_stock_available:.2f}\n")
-            # Affichage détaillé des stocks de tous les composants du groupe
+            # Affichage détaillé des stocks de tous les composants du groupe organisé par niveau BOM
             if hasattr(group, 'component_stocks'):
+                # Organiser par type de composant pour un affichage plus clair
+                pf_stocks = {}
+                sf_stocks = {}
+                ps_stocks = {}
+                
                 for comp_id, stock in group.component_stocks.items():
+                    if comp_id.startswith('PF'):
+                        pf_stocks[comp_id] = stock
+                    elif comp_id.startswith('SF'):
+                        sf_stocks[comp_id] = stock
+                    elif comp_id.startswith('PS'):
+                        ps_stocks[comp_id] = stock
+                    else:
+                        # Autres composants
+                        f.write(f"#   Stock {comp_id} Restant: {stock:.2f}\n")
+                
+                # Afficher dans l'ordre hiérarchique : PF -> SF -> PS
+                for comp_id, stock in sorted(pf_stocks.items()):
+                    f.write(f"#   Stock {comp_id} Restant: {stock:.2f}\n")
+                for comp_id, stock in sorted(sf_stocks.items()):
+                    f.write(f"#   Stock {comp_id} Restant: {stock:.2f}\n")
+                for comp_id, stock in sorted(ps_stocks.items()):
                     f.write(f"#   Stock {comp_id} Restant: {stock:.2f}\n")
                     # Mise à jour du résumé global
                     if comp_id not in all_component_stocks_summary:

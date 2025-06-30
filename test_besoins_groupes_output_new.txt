@@ -1,7 +1,7 @@
 Part	Description	Order Code	FG	CAT	US	FS	Qty	X3 Date	GRP_FLG	Start Date	Delay
 
 # Group ID: GRP1
-#   Produit PS Principal: PS002
+#   Produit PS Principal: PS001
 #   Fenêtre Temporelle: 2024-06-24 à 2024-07-21
 #   Stock PS Théorique Restant: 2280.00
 #   Stock PF001 Restant: 50.00
@@ -30,11 +30,11 @@ PS002	Capteur Température	OF240615B	F3	0	1	1	250	2024-07-21	1	2024-07-01	0
 #   Stock PS Théorique Restant: 205.00
 #   Stock PF003 Restant: 25.00
 #   Stock SF001 Restant: -25.00
+#   Stock SF003 Restant: -25.00
 #   Stock PS001 Restant: -87.50
 #   Stock PS002 Restant: -62.50
 #   Stock PS003 Restant: -50.00
 #   Stock PS004 Restant: -37.50
-#   Stock SF003 Restant: -25.00
 #   Stock PS005 Restant: -37.50
 #   Stock PS006 Restant: 297.50
 #   OFs dans ce Groupe:
@@ -47,13 +47,13 @@ PS006	Driver LED	OF240609B	R1	0	1	1	180	2024-07-06	2	2024-07-01	0
 #   Stock PS Théorique Restant: 40.00
 #   Stock PF005 Restant: 40.00
 #   Stock SF001 Restant: -80.00
+#   Stock SF005 Restant: -40.00
 #   Stock PS001 Restant: -140.00
 #   Stock PS002 Restant: -160.00
 #   Stock PS003 Restant: -120.00
 #   Stock PS004 Restant: -60.00
 #   Stock PS005 Restant: -120.00
 #   Stock PS006 Restant: -20.00
-#   Stock SF005 Restant: -40.00
 #   OFs dans ce Groupe:
 PF005	BATENS INDUSTRIAL	OF240613	M	3	1	1	40	2024-07-15	3	2024-07-15	0
 
@@ -101,12 +101,12 @@ SF003	Interface Utilisateur	OF240608	H	2	1	1	80	2024-07-03	6	2024-07-01	0
 #   Fenêtre Temporelle: 2024-07-08 à 2024-08-04
 #   Stock PS Théorique Restant: 60.00
 #   Stock PF004 Restant: 60.00
+#   Stock SF004 Restant: -60.00
 #   Stock PS001 Restant: -60.00
 #   Stock PS002 Restant: -90.00
 #   Stock PS003 Restant: -60.00
 #   Stock PS004 Restant: -180.00
 #   Stock PS005 Restant: -30.00
-#   Stock SF004 Restant: -60.00
 #   OFs dans ce Groupe:
 PF004	BATENS COMPACT	OF240610	J	2	1	1	60	2024-07-08	7	2024-07-08	0
 
