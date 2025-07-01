@@ -472,8 +472,6 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
                 
                 # Décrémenter les besoins en composants
                 for comp_id, qty_needed in client_needed_components.items():
-                    if comp_id not in current_group.component_stocks:
-                        current_group.component_stocks[comp_id] = 0
                     current_group.component_stocks[comp_id] -= qty_needed
                     
                 print(f"  Added family OF {client_of.id} ({client_of.product_type}) to {current_group.id}. Updated component stocks.")
