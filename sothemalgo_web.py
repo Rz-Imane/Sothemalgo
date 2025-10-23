@@ -28,15 +28,11 @@ def parse_output_file(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Remplacer les \n littéraux par de vrais retours à la ligne
         content = content.replace('\\n', '\n')
-        
         groups = []
         unassigned_ofs = []
         
-        # Séparer le contenu en lignes
         lines = content.split('\n')
-        
         current_group = None
         in_group = False
         in_unassigned = False
@@ -77,10 +73,10 @@ def parse_output_file(file_path):
                 in_unassigned = True
                 continue
                 
-            # Parser les lignes de données (OFs)
-            if '\t' in line and not line.startswith('#') and line.count('\t') >= 8:
+            # Parser les lignes de données (OFs) - UPDATED FOR INDIVIDUAL STOCK
+            if '\t' in line and not line.startswith('#') and line.count('\t') >= 12:  # Changed from 8 to 12
                 parts = line.split('\t')
-                if len(parts) >= 9:
+                if len(parts) >= 13:  # Changed from 9 to 13
                     of_data = {
                         'Part': parts[0],
                         'Description': parts[1],
@@ -93,7 +89,8 @@ def parse_output_file(file_path):
                         'X3_Date': parts[8],
                         'GRP_FLG': parts[9] if len(parts) > 9 else '',
                         'Start_Date': parts[10] if len(parts) > 10 else '',
-                        'Delay': parts[11] if len(parts) > 11 else ''
+                        'Delay': parts[11] if len(parts) > 11 else '',
+                        'remaining_stock': parts[12] if len(parts) > 12 else 'N/A'  # NEW: Individual stock from column 13
                     }
                     
                     if in_unassigned:
@@ -101,7 +98,6 @@ def parse_output_file(file_path):
                     elif current_group:
                         current_group['ofs'].append(of_data)
         
-        # Ajouter le dernier groupe s'il existe
         if current_group:
             groups.append(current_group)
         
@@ -251,8 +247,21 @@ def index():
             output_file_to_read = smoothing_params['output_file_path']
             
             if os.path.exists(output_file_to_read) and os.path.getsize(output_file_to_read) > 0:
+                
                 # Parser le fichier et retourner les données structurées
                 parsed_data = parse_output_file(output_file_to_read)
+                
+                # For unassigned OFs, we don't need complex stock mapping anymore
+                # because individual stock is now included in the output file
+                for of in parsed_data.get('unassigned_ofs', []):
+                    # The individual stock should already be in the 'remaining_stock' field
+                    # from the parse_output_file function
+                    if not of.get('remaining_stock'):
+                        of['remaining_stock'] = 'N/A'
+
+                print("✅ Final parsed data - Individual stocks should be available now")
+                print(f"✅ Sample OF data: {parsed_data.get('unassigned_ofs', [])[:1] if parsed_data.get('unassigned_ofs') else 'No unassigned OFs'}")
+
                 return render_template('results_modern.html', 
                                      groups=parsed_data.get('groups', []),
                                      unassigned_ofs=parsed_data.get('unassigned_ofs', []),

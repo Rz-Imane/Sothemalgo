@@ -781,7 +781,7 @@
                                         <span class="group-info-value">{{ group.time_window or 'Non définie' }}</span>
                                     </div>
                                     <div class="group-info-item">
-                                        <span class="group-info-label">Stock Restant</span>
+                                        <span class="group-info-label">Stock</span>
                                         <span class="group-info-value">{{ group.remaining_stock or 'Non calculé' }}</span>
                                     </div>
                                     <div class="group-info-item">
@@ -803,6 +803,7 @@
                                             <th>Qty</th>
                                             <th>Date X3</th>
                                             <th>Statut</th>
+                                            <th>remaining stock</th>   
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -820,6 +821,8 @@
                                                     Affecté
                                                 </span>
                                             </td>
+                                            <td>{{ of.remaining_stock or 'N/A' }}</td>
+
                                         </tr>
                                         {% endfor %}
                                     </tbody>
@@ -872,6 +875,7 @@
                                         <th>Qty</th>
                                         <th>Date X3</th>
                                         <th>Statut</th>
+                                        <th>remaining_stock</th> 
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -889,6 +893,7 @@
                                                 Non affecté
                                             </span>
                                         </td>
+                                        <td>{{ of.remaining_stock or 'N/A' }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
