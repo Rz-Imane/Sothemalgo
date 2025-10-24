@@ -36,6 +36,7 @@ def parse_output_file(file_path):
         current_group = None
         in_group = False
         in_unassigned = False
+        in_calculated_stocks = False
         
         for line in lines:
             line = line.strip()
@@ -49,10 +50,12 @@ def parse_output_file(file_path):
                     'ps_product': '',
                     'time_window': '',
                     'remaining_stock': '',
+                    'calculated_stocks': {},  # Pour stocker tous les stocks calculés
                     'ofs': []
                 }
                 in_group = True
                 in_unassigned = False
+                in_calculated_stocks = False
                 continue
                 
             # Détecter les informations du groupe
@@ -61,8 +64,23 @@ def parse_output_file(file_path):
                     current_group['ps_product'] = line.split('Produit PS Principal:')[1].strip().replace('#', '').strip()
                 elif 'Fenêtre Temporelle:' in line:
                     current_group['time_window'] = line.split('Fenêtre Temporelle:')[1].strip().replace('#', '').strip()
-                elif 'Stock PS Théorique Restant:' in line:
-                    current_group['remaining_stock'] = line.split('Stock PS Théorique Restant:')[1].strip().replace('#', '').strip()
+                elif 'Stock PS Calculé:' in line:
+                    current_group['remaining_stock'] = line.split('Stock PS Calculé:')[1].strip().replace('#', '').strip()
+                elif 'Stocks calculés:' in line:
+                    in_calculated_stocks = True
+                    continue
+                elif in_calculated_stocks and line.startswith('#') and ':' in line and 'unités' in line:
+                    # Ligne de stock calculé détaillé (ex: "# PS1(A): 100 unités")
+                    stock_line = line.replace('#', '').strip()
+                    if ':' in stock_line and 'unités' in stock_line:
+                        product_part = stock_line.split(':')[0].strip()
+                        stock_value = stock_line.split(':')[1].replace('unités', '').strip()
+                        try:
+                            current_group['calculated_stocks'][product_part] = float(stock_value)
+                        except ValueError:
+                            current_group['calculated_stocks'][product_part] = 0
+                elif line.startswith('#') and 'OFs dans ce Groupe:' in line:
+                    in_calculated_stocks = False
                 
             # Détecter la section des OFs non affectés
             if 'OFs Non Affectés' in line:
@@ -71,12 +89,13 @@ def parse_output_file(file_path):
                     current_group = None
                 in_group = False
                 in_unassigned = True
+                in_calculated_stocks = False
                 continue
                 
-            # Parser les lignes de données (OFs) - UPDATED FOR INDIVIDUAL STOCK
-            if '\t' in line and not line.startswith('#') and line.count('\t') >= 12:  # Changed from 8 to 12
+            # Parser les lignes de données (OFs)
+            if '\t' in line and not line.startswith('#') and line.count('\t') >= 12:
                 parts = line.split('\t')
-                if len(parts) >= 13:  # Changed from 9 to 13
+                if len(parts) >= 13:
                     of_data = {
                         'Part': parts[0],
                         'Description': parts[1],
@@ -90,7 +109,7 @@ def parse_output_file(file_path):
                         'GRP_FLG': parts[9] if len(parts) > 9 else '',
                         'Start_Date': parts[10] if len(parts) > 10 else '',
                         'Delay': parts[11] if len(parts) > 11 else '',
-                        'remaining_stock': parts[12] if len(parts) > 12 else 'N/A'  # NEW: Individual stock from column 13
+                        'remaining_stock': parts[12] if len(parts) > 12 else 'N/A'
                     }
                     
                     if in_unassigned:
@@ -105,7 +124,7 @@ def parse_output_file(file_path):
         
     except Exception as e:
         return {'error': f'Erreur lors du parsing du fichier: {str(e)}', 'groups': [], 'unassigned_ofs': []}
-
+    
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)

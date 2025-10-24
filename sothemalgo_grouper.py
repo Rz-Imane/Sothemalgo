@@ -876,12 +876,11 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             f.write(f"#   Fenêtre Temporelle: {group.time_window_start.strftime('%Y-%m-%d')} à {group.time_window_end.strftime('%Y-%m-%d')}\n")
             
             # Afficher les stocks calculés du groupe
-            if hasattr(group, 'individual_product_stocks'):
-                f.write(f"#   Stocks calculés:\n")
-                for product_id, stock in sorted(group.individual_product_stocks.items()):
-                    f.write(f"#     {product_id}: {stock:.0f} unités\n")
-            
-            f.write(f"#   OFs dans ce Groupe:\n")
+            if hasattr(group, 'individual_product_stocks') and group.ps_product_id in group.individual_product_stocks:
+                ps_stock = group.individual_product_stocks[group.ps_product_id]
+                f.write(f"#   Stock PS Calculé: {ps_stock:.2f}\n")
+            else:
+                f.write(f"#   Stock PS: Non calculé\n")
             
             ofs_in_this_group = [of for of in all_ofs_scheduled if of.assigned_group_id == group.id]
 

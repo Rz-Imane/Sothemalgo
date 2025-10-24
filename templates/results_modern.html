@@ -780,10 +780,30 @@
                                         <span class="group-info-label">Fenêtre Temporelle</span>
                                         <span class="group-info-value">{{ group.time_window or 'Non définie' }}</span>
                                     </div>
+                                    <!--
                                     <div class="group-info-item">
-                                        <span class="group-info-label">Stock</span>
-                                        <span class="group-info-value">{{ group.remaining_stock or 'Non calculé' }}</span>
+                                        <span class="group-info-label">Stock Total</span>
+                                        <span class="group-info-value">
+                                            {% if group.calculated_stocks and group.calculated_stocks.values()|sum > 0 %}
+                                                {{ "%.0f"|format(group.calculated_stocks.values()|sum) }}
+                                            {% elif group.remaining_stock and group.remaining_stock != 'Non calculé' and group.remaining_stock != '0.00' %}
+                                                {{ group.remaining_stock }}
+                                            {% else %}
+                                                {% set total_stock_from_ofs = namespace(value=0) %}
+                                                {% for of in group.ofs %}
+                                                    {% if of.remaining_stock and of.remaining_stock != 'N/A' %}
+                                                        {% set total_stock_from_ofs.value = total_stock_from_ofs.value + (of.remaining_stock|float|default(0)) %}
+                                                    {% endif %}
+                                                {% endfor %}
+                                                {% if total_stock_from_ofs.value > 0 %}
+                                                    {{ "%.0f"|format(total_stock_from_ofs.value) }}
+                                                {% else %}
+                                                    Non calculé
+                                                {% endif %}
+                                            {% endif %}
+                                        </span>
                                     </div>
+                                    -->
                                     <div class="group-info-item">
                                         <span class="group-info-label">Nombre d'OFs</span>
                                         <span class="group-info-value">{{ group.ofs|length }}</span>
