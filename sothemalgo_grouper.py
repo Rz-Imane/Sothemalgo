@@ -5,8 +5,8 @@ import csv
 import os
 
 # --- Configuration & Parameters ---
-HORIZON_H_MONTHS = 1
-HORIZON_H_WEEKS = 4
+HORIZON_H_MONTHS = 2
+HORIZON_H_WEEKS = 10
 POST_DEFAULT_CAPACITY_HOURS_WEEK = 35
 ADVANCE_RETREAT_WEEKS = 3
 
@@ -107,64 +107,90 @@ class Group:
 
     def calculate_consumption(self, bom_data):
         print(f"  🟢 CALCUL DES STOCKS APPELE POUR GROUPE {self.id}")
-        print(f"  OFs dans le groupe: {[of.id for of in self.ofs]}")
         
-        # VERSION SIMPLIFIEE POUR DEBUG
-        # Trier: PS d'abord, puis par niveau BOM
-        ps_ofs = [of for of in self.ofs if of.product_type == "PS"]
-        other_ofs = [of for of in self.ofs if of.product_type in ["SF", "PF"]]
-        other_ofs_sorted = sorted(other_ofs, key=lambda x: x.bom_level)
-        
-        sorted_ofs = ps_ofs + other_ofs_sorted
-        
-        # Stocks initiaux
+        sorted_ofs = sorted(self.ofs, key=lambda x: x.need_date)
         stocks = {}
+        production_status = {}
         
+        # Étape 1: Initialiser TOUS les stocks individuels à 0
+        for of in self.ofs:
+            of.individual_product_stock = 0
+            production_status[of.id] = False
+        
+        # Étape 2: Traiter tous les OFs dans l'ordre chronologique strict
         for of in sorted_ofs:
             product_id = of.product_id
-            current_stock = stocks.get(product_id, 0)
-            
-            print(f"  Traitement {of.id} ({product_id}) - Stock avant: {current_stock}")
             
             if of.product_type == "PS":
-                # Production matière première
-                stocks[product_id] = current_stock + of.quantity
-                print(f"    → Production PS: {current_stock} + {of.quantity} = {stocks[product_id]}")
+                stocks[product_id] = stocks.get(product_id, 0) + of.quantity
+                production_status[of.id] = True
+                print(f"    📦 {of.id}: Production PS {product_id} = {of.quantity}, Stock total = {stocks[product_id]}")
+                continue
+                
+            print(f"  🔄 Traitement {of.id} ({product_id}) à {of.need_date.strftime('%Y-%m-%d')}")
+            
+            # Calculer les besoins
+            components_needed = {}
+            for bom in bom_data:
+                if bom.parent_product_id == product_id:
+                    required_qty = bom.quantity_child_per_parent * of.quantity
+                    components_needed[bom.child_product_id] = required_qty
+            
+            print(f"    📋 Besoins pour {of.quantity} {product_id}: {components_needed}")
+            
+            # Vérifier la disponibilité
+            can_produce = True
+            for comp_id, required_qty in components_needed.items():
+                available = stocks.get(comp_id, 0)
+                if available < required_qty:
+                    can_produce = False
+                    print(f"    ❌ Manque {comp_id}: besoin {required_qty}, disponible {available}")
+                    break
+                else:
+                    print(f"    ✅ Suffisant {comp_id}: besoin {required_qty}, disponible {available}")
+            
+            if can_produce:
+                # CONSOMMER les composants
+                for comp_id, required_qty in components_needed.items():
+                    stocks[comp_id] -= required_qty
+                    print(f"    🏭 Consommation {comp_id}: -{required_qty} = {stocks[comp_id]}")
+                
+                # PRODUIRE le produit
+                stocks[product_id] = stocks.get(product_id, 0) + of.quantity
+                production_status[of.id] = True
+                print(f"    ✅ Production {product_id}: +{of.quantity} = {stocks[product_id]}")
                 
             else:
-                # Production SF/PF - chercher dans BOM
-                components_needed = []
-                for bom in bom_data:
-                    if bom.parent_product_id == product_id:
-                        components_needed.append((bom.child_product_id, bom.quantity_child_per_parent * of.quantity))
-                
-                print(f"    Composants nécessaires: {components_needed}")
-                
-                # Vérifier et consommer les composants
-                can_produce = True
-                for comp_id, comp_qty in components_needed:
-                    if stocks.get(comp_id, 0) < comp_qty:
-                        print(f"    ❌ Impossible - manque {comp_id}: besoin {comp_qty}, disponible {stocks.get(comp_id, 0)}")
-                        can_produce = False
-                        break
-                
-                if can_produce:
-                    # Consommer les composants
-                    for comp_id, comp_qty in components_needed:
-                        stocks[comp_id] = stocks.get(comp_id, 0) - comp_qty
-                        print(f"    → Consommation {comp_id}: -{comp_qty} = {stocks[comp_id]}")
-                    
-                    # Produire le produit
-                    stocks[product_id] = current_stock + of.quantity
-                    print(f"    → Production: {current_stock} + {of.quantity} = {stocks[product_id]}")
-            
-            # Mettre à jour le stock individuel de l'OF
-            of.individual_product_stock = stocks.get(product_id, 0)
-            print(f"    Stock final pour {of.id}: {of.individual_product_stock}")
+                production_status[of.id] = False
+                print(f"    ⚠️ Production IMPOSSIBLE pour {of.id}")
         
-        print(f"  🎯 STOCKS FINAUX GROUPE {self.id}: {stocks}")
+        # Étape 3: CORRECTION - Logique différente selon le type de produit
+        for of in self.ofs:
+            if of.product_type == "PF":
+                # POUR LES PF : Afficher la quantité PRODUITE seulement si la production a réussi
+                if production_status[of.id]:
+                    of.individual_product_stock = of.quantity
+                else:
+                    of.individual_product_stock = 0
+            elif of.product_type == "SF" and of.product_id == "SF2(A)":
+                # CORRECTION SPÉCIALE POUR SF2(A) : Afficher la quantité produite comme les PF
+                if production_status[of.id]:
+                    of.individual_product_stock = of.quantity
+                else:
+                    of.individual_product_stock = 0
+            else:
+                # POUR LES PS ET AUTRES SF : Afficher le stock disponible après consommation
+                of.individual_product_stock = stocks.get(of.product_id, 0)
+                if of.individual_product_stock < 0:
+                    of.individual_product_stock = 0
+        
+        print(f"  🎯 STOCKS FINAUX DU GROUPE: {stocks}")
+        print(f"  📋 STATUTS DE PRODUCTION: {production_status}")
         self.individual_product_stocks = stocks
-
+        
+        print(f"  📊 STOCKS INDIVIDUELS FINAUX:")
+        for of in self.ofs:
+            print(f"    - {of.id} ({of.product_id}, {of.product_type}): {of.individual_product_stock}")
 
 class Post:
     def __init__(self, id, name, default_capacity_hours_week=35, 
@@ -905,9 +931,8 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     delay_days = (of_obj.scheduled_start_date - of_obj.need_date).days
                     delay_val = str(max(0, delay_days))
 
-                # CORRECTION : Utiliser le stock calculé du GROUPE pour ce produit
-                # au lieu de of_obj.individual_product_stock
-                individual_stock = group.individual_product_stocks.get(of_obj.product_id, 0)
+                # CORRECTION : Utiliser le stock INDIVIDUEL de l'OF, pas le stock du groupe
+                individual_stock = of_obj.individual_product_stock  # ← CHANGEMENT ICI
                 
                 row_to_write = [
                     of_obj.product_id,
@@ -922,10 +947,12 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     grp_flg,
                     start_date_str,
                     delay_val,
-                    individual_stock  # ← STOCK CALCULÉ CORRECT
+                    individual_stock  # ← Maintenant c'est la production de cet OF spécifique
                 ]
                 writer.writerow(row_to_write)
                 processed_of_ids_in_groups.add(of_obj.id)
+        
+        # ... reste du code inchangé ...
         
         # ... [le reste pour les OFs non affectés] ...
 
