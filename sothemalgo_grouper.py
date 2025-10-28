@@ -108,27 +108,29 @@ class Group:
     def calculate_consumption(self, bom_data):
         print(f"  🟢 CALCUL DES STOCKS APPELE POUR GROUPE {self.id}")
         
-        sorted_ofs = sorted(self.ofs, key=lambda x: x.need_date)
+        def sorting_key(of):
+            type_priority = {"PS": 0, "SF": 1, "PF": 2}
+            return (of.need_date, type_priority.get(of.product_type, 3), of.id)
+        
+        sorted_ofs = sorted(self.ofs, key=sorting_key)
         stocks = {}
         production_status = {}
         
-        # Étape 1: Initialiser TOUS les stocks individuels à 0
+        # NOUVEAU : Stocker la contribution de chaque OF
+        of_contributions = {}
         for of in self.ofs:
-            of.individual_product_stock = 0
-            production_status[of.id] = False
+            of_contributions[of.id] = 0
         
-        # Étape 2: Traiter tous les OFs dans l'ordre chronologique strict
+        # Étape 1: Traiter la production
         for of in sorted_ofs:
             product_id = of.product_id
             
             if of.product_type == "PS":
                 stocks[product_id] = stocks.get(product_id, 0) + of.quantity
                 production_status[of.id] = True
-                print(f"    📦 {of.id}: Production PS {product_id} = {of.quantity}, Stock total = {stocks[product_id]}")
+                of_contributions[of.id] = of.quantity
                 continue
                 
-            print(f"  🔄 Traitement {of.id} ({product_id}) à {of.need_date.strftime('%Y-%m-%d')}")
-            
             # Calculer les besoins
             components_needed = {}
             for bom in bom_data:
@@ -136,61 +138,73 @@ class Group:
                     required_qty = bom.quantity_child_per_parent * of.quantity
                     components_needed[bom.child_product_id] = required_qty
             
-            print(f"    📋 Besoins pour {of.quantity} {product_id}: {components_needed}")
-            
             # Vérifier la disponibilité
             can_produce = True
             for comp_id, required_qty in components_needed.items():
                 available = stocks.get(comp_id, 0)
                 if available < required_qty:
                     can_produce = False
-                    print(f"    ❌ Manque {comp_id}: besoin {required_qty}, disponible {available}")
                     break
-                else:
-                    print(f"    ✅ Suffisant {comp_id}: besoin {required_qty}, disponible {available}")
             
             if can_produce:
-                # CONSOMMER les composants
+                # Consommer les composants
                 for comp_id, required_qty in components_needed.items():
                     stocks[comp_id] -= required_qty
-                    print(f"    🏭 Consommation {comp_id}: -{required_qty} = {stocks[comp_id]}")
                 
-                # PRODUIRE le produit
+                # Produire
                 stocks[product_id] = stocks.get(product_id, 0) + of.quantity
                 production_status[of.id] = True
-                print(f"    ✅ Production {product_id}: +{of.quantity} = {stocks[product_id]}")
-                
+                of_contributions[of.id] = of.quantity
             else:
                 production_status[of.id] = False
-                print(f"    ⚠️ Production IMPOSSIBLE pour {of.id}")
         
-        # Étape 3: CORRECTION - Logique différente selon le type de produit
+        # Étape 2: CORRECTION - Calculer la consommation individuelle
+        # Recréer l'ordre de consommation pour savoir quel OF a été consommé
+        of_remaining = of_contributions.copy()
+        
+        # Recréer la consommation dans l'ordre chronologique
+        temp_stocks = {}
+        for of in sorted_ofs:
+            if of.product_type == "PS":
+                temp_stocks[of.product_id] = temp_stocks.get(of.product_id, 0) + of.quantity
+            elif of.product_type in ["SF", "PF"] and production_status[of.id]:
+                # Pour les SF/PF, calculer les besoins
+                components_needed = {}
+                for bom in bom_data:
+                    if bom.parent_product_id == of.product_id:
+                        required_qty = bom.quantity_child_per_parent * of.quantity
+                        components_needed[bom.child_product_id] = required_qty
+                
+                # Consommer depuis les OFs disponibles (FIFO)
+                for comp_id, required_qty in components_needed.items():
+                    remaining_need = required_qty
+                    # Consommer depuis les OFs dans l'ordre chronologique
+                    for supplier_of in sorted_ofs:
+                        if (supplier_of.product_id == comp_id and 
+                            production_status[supplier_of.id] and 
+                            of_remaining[supplier_of.id] > 0):
+                            
+                            can_take = min(remaining_need, of_remaining[supplier_of.id])
+                            of_remaining[supplier_of.id] -= can_take
+                            remaining_need -= can_take
+                            
+                            if remaining_need <= 0:
+                                break
+                
+                # Produire
+                if of.product_type == "SF":
+                    temp_stocks[of.product_id] = temp_stocks.get(of.product_id, 0) + of.quantity
+        
+        # Étape 3: Appliquer les stocks individuels
         for of in self.ofs:
             if of.product_type == "PF":
-                # POUR LES PF : Afficher la quantité PRODUITE seulement si la production a réussi
-                if production_status[of.id]:
-                    of.individual_product_stock = of.quantity
-                else:
-                    of.individual_product_stock = 0
-            elif of.product_type == "SF" and of.product_id == "SF2(A)":
-                # CORRECTION SPÉCIALE POUR SF2(A) : Afficher la quantité produite comme les PF
                 if production_status[of.id]:
                     of.individual_product_stock = of.quantity
                 else:
                     of.individual_product_stock = 0
             else:
-                # POUR LES PS ET AUTRES SF : Afficher le stock disponible après consommation
-                of.individual_product_stock = stocks.get(of.product_id, 0)
-                if of.individual_product_stock < 0:
-                    of.individual_product_stock = 0
-        
-        print(f"  🎯 STOCKS FINAUX DU GROUPE: {stocks}")
-        print(f"  📋 STATUTS DE PRODUCTION: {production_status}")
-        self.individual_product_stocks = stocks
-        
-        print(f"  📊 STOCKS INDIVIDUELS FINAUX:")
-        for of in self.ofs:
-            print(f"    - {of.id} ({of.product_id}, {of.product_type}): {of.individual_product_stock}")
+                # PS et SF affichent ce qui reste après consommation
+                of.individual_product_stock = of_remaining[of.id]
 
 class Post:
     def __init__(self, id, name, default_capacity_hours_week=35, 
