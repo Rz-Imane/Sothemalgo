@@ -117,9 +117,19 @@ def parse_output_file(file_path):
                     elif current_group:
                         current_group['ofs'].append(of_data)
         
+        # CORRECTION : Cette partie doit être DEDANS le try, mais APRÈS la boucle for line
         if current_group:
             groups.append(current_group)
-        
+            
+        # CORRECTION : Ajouter le calcul de has_ps pour chaque groupe
+        for group in groups:
+            # Vérifier si le groupe contient des PS
+            has_ps = any(
+                of.get('Part', '').startswith('PS') 
+                for of in group.get('ofs', [])
+            )
+            group['has_ps'] = has_ps
+            
         return {'groups': groups, 'unassigned_ofs': unassigned_ofs}
         
     except Exception as e:

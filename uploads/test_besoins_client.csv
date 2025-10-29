@@ -1,14 +1,14 @@
 Part,Description,Order Code,FG,CAT US FS,Qty,Date
 PS1(A),Composant Base Type A,OF15,A,0 1 1,200,2025-07-01
 PS1(B),Composant Base Type B,OF16,B,0 1 1,150,2025-07-10
-PS1(C),Composant Base Type C,OF17,C,0 1 1,380,2025-08-01
+PS1(C),Composant Base Type C,OF17,C,0 1 1,180,2025-08-01
 SF2(A),Semi-Fini Type A variant 2,OF1,A,1 1 1,100,2025-07-01
 SF1(A),Semi-Fini Type A variant 1,OF2,A,1 1 1,100,2025-07-15
 PF1(A),Produit Fini Type A variant 1,OF3,A,2 1 1,100,2025-09-01
 SF1(B),Semi-Fini Type B variant 1,OF4,B,1 1 1,100,2025-07-15
 PF1(B),Produit Fini Type B variant 1,OF5,B,2 1 1,100,2025-08-01
 PF2(B),Produit Fini Type B variant 2,OF6,B,2 1 1,100,2025-08-15
-SF1(C),Semi-Fini Type C variant 1,OF7,C,1 1 1,300,2025-08-02
+SF1(C),Semi-Fini Type C variant 1,OF7,C,1 1 1,100,2025-08-02
 PF1(C),Produit Fini Type C variant 1,OF8,C,2 1 1,100,2025-09-30
 PF2(C),Produit Fini Type C variant 2,OF9,C,2 1 1,100,2025-10-02
 PF3(B),Produit Fini Type B variant 3,OF10,B,2 1 1,100,2025-12-15

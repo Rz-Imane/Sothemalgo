@@ -836,10 +836,14 @@
                                             <td>{{ of.Qty }}</td>
                                             <td>{{ of.X3_Date }}</td>
                                             <td>
-                                                <span class="status-badge assigned">
-                                                    <i class="fas fa-check"></i>
+                                            <span class="status-badge {% if group.has_ps %}assigned{% else %}unassigned{% endif %}">
+                                                <i class="fas fa-{% if group.has_ps %}check{% else %}times{% endif %}"></i>
+                                                {% if group.has_ps %}
                                                     Affecté
-                                                </span>
+                                                {% else %}
+                                                    Non affecté
+                                                {% endif %}
+                                            </span>
                                             </td>
                                             <td>{{ of.remaining_stock or 'N/A' }}</td>
 
