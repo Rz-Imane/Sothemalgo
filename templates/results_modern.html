@@ -678,7 +678,7 @@
                     </div>
                 </div>
                 <div class="stat-value" id="groupsCount">{{ groups|length }}</div>
-                <div class="stat-label">Groupes productibles</div>
+                <div class="stat-label">Groupes</div>
             </div>
 
             <!-- Statistique OFs non affectés -->
@@ -689,7 +689,7 @@
                     </div>
                 </div>
                 <div class="stat-value" id="unassignedCount">{{ unassigned_ofs|length }}</div>
-                <div class="stat-label">OFs non productibles</div>
+                <div class="stat-label">OFs non affectés</div>
             </div>
 
             <!-- Statistique taux d'affectation -->
@@ -713,7 +713,7 @@
                         0%
                     {% endif %}
                 </div>
-                <div class="stat-label">Taux d'affectation productible</div>
+                <div class="stat-label">Taux d'affectation</div>
             </div>
             
             <div class="stat-card">
@@ -766,11 +766,11 @@
                     {% set productible_ofs_count.value = productible_ofs_count.value + group.ofs|length %}
                 {% endfor %}
                 
-                L'analyse a généré {{ groups|length }} groupes productibles avec {{ productible_ofs_count.value }} OFs.
+                L'analyse a généré {{ groups|length }} groupes avec {{ productible_ofs_count.value }} OFs.
                 
                 {% set total_ofs = productible_ofs_count.value + unassigned_ofs|length %}
                 
-                Taux d'affectation productible : 
+                Taux d'affectation : 
                 {% if total_ofs > 0 %}
                     {{ "%.1f"|format((productible_ofs_count.value / total_ofs * 100)) }}%
                 {% else %}
@@ -929,7 +929,7 @@
                                     <span class="group-info-value">{{ total_ofs }}</span>
                                 </div>
                                 <div class="group-info-item">
-                                    <span class="group-info-label">OFs productibles</span>
+                                    <span class="group-info-label">OFs</span>
                                     <span class="group-info-value">{{ productible_ofs_count }}</span>
                                 </div>
                                 <div class="group-info-item">
@@ -937,7 +937,7 @@
                                     <span class="group-info-value">{{ groups|length }}</span>
                                 </div>
                                 <div class="group-info-item">
-                                    <span class="group-info-label">Taux de productibilité</span>
+                                    <span class="group-info-label">Taux d'affectation</span>
                                     <span class="group-info-value">
                                         {% if total_ofs > 0 %}
                                             {{ "%.1f"|format((productible_ofs_count / total_ofs * 100)) }}%
@@ -1007,19 +1007,19 @@
         </div>
 
         <!-- SECTION DES OFs NON AFFECTÉS EN BAS -->
-<!-- SECTION DES VRAIS OFs NON AFFECTÉS EN BAS -->
+
         {% if unassigned_ofs or non_productible_ofs_in_groups %}
         <div class="unassigned-section fade-in">
             <h3 class="unassigned-title">
                 <i class="fas fa-exclamation-triangle"></i>
-                Ordres de Fabrication Non Productibles ({{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs)
+                Ordres de Fabrication Non Affectés ({{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs)
             </h3>
             
             <div class="group-card">
                 <div class="group-header unassigned-header">
                     <div class="group-title">
                         <i class="fas fa-list"></i>
-                        Liste des OFs non productibles
+                        Liste des OFs non affectés
                     </div>
                     <span class="status-badge unassigned-count">
                         {{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs

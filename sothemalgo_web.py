@@ -141,7 +141,7 @@ def parse_output_file(file_path):
         return {
             'groups': groups_with_ps,  # Uniquement les groupes AVEC PS
             'unassigned_ofs': truly_unassigned_ofs,
-            'non_productible_groups': groups_without_ps  # Pour information
+            'non_productible_ofs_in_groups': [of for group in groups_without_ps for of in group['ofs']]  # ← AJOUTER CETTE LIGNE
         }
         
     except Exception as e:
