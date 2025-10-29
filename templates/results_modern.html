@@ -513,6 +513,49 @@
             font-weight: 600;
         }
 
+        /* Section des OFs non affectés */
+        .unassigned-section {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--border-color);
+            animation: fadeIn 0.6s ease forwards;
+        }
+
+        .unassigned-title {
+            color: var(--warning-color);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .unassigned-header {
+            background: linear-gradient(135deg, var(--warning-color), #f59e0b);
+            cursor: default !important;
+        }
+
+        .unassigned-count {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .unassigned-footer {
+            padding: 1rem;
+            text-align: center;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            background: rgba(245, 158, 11, 0.05);
+        }
+
+        /* Assurer que la section des OFs non affectés est toujours étendue */
+        .unassigned-section .group-ofs {
+            max-height: none !important;
+            display: block !important;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .main-content {
@@ -563,8 +606,14 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { 
+                opacity: 0; 
+                transform: translateY(20px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
         }
 
         /* Badge de statut */
@@ -621,6 +670,7 @@
     <div class="container">
         <!-- Statistiques en haut -->
         <div class="stats-grid fade-in">
+            <!-- Statistique groupes générés -->
             <div class="stat-card">
                 <div class="stat-header">
                     <div class="stat-icon groups">
@@ -628,9 +678,10 @@
                     </div>
                 </div>
                 <div class="stat-value" id="groupsCount">{{ groups|length }}</div>
-                <div class="stat-label">Groupes générés</div>
+                <div class="stat-label">Groupes productibles</div>
             </div>
-            
+
+            <!-- Statistique OFs non affectés -->
             <div class="stat-card">
                 <div class="stat-header">
                     <div class="stat-icon unassigned">
@@ -638,9 +689,10 @@
                     </div>
                 </div>
                 <div class="stat-value" id="unassignedCount">{{ unassigned_ofs|length }}</div>
-                <div class="stat-label">OFs non affectés</div>
+                <div class="stat-label">OFs non productibles</div>
             </div>
-            
+
+            <!-- Statistique taux d'affectation -->
             <div class="stat-card">
                 <div class="stat-header">
                     <div class="stat-icon efficiency">
@@ -648,19 +700,20 @@
                     </div>
                 </div>
                 <div class="stat-value" id="efficiency">
-                    {% set all_assigned_ofs = [] %}
+                    {% set productible_ofs_count = namespace(value=0) %}
                     {% for group in groups %}
-                        {% set _ = all_assigned_ofs.extend(group.ofs) %}
+                        {% set productible_ofs_count.value = productible_ofs_count.value + group.ofs|length %}
                     {% endfor %}
-                    {% set assigned_ofs = all_assigned_ofs|length %}
-                    {% set total_ofs = assigned_ofs + unassigned_ofs|length %}
+                    
+                    {% set total_ofs = productible_ofs_count.value + unassigned_ofs|length %}
+                    
                     {% if total_ofs > 0 %}
-                        {{ "%.1f"|format((assigned_ofs / total_ofs * 100)) }}%
+                        {{ "%.1f"|format((productible_ofs_count.value / total_ofs * 100)) }}%
                     {% else %}
                         0%
                     {% endif %}
                 </div>
-                <div class="stat-label">Taux d'affectation</div>
+                <div class="stat-label">Taux d'affectation productible</div>
             </div>
             
             <div class="stat-card">
@@ -701,19 +754,25 @@
         {% endif %}
 
         <!-- Alerte de succès -->
+        <!-- Alerte de succès -->
         {% if groups and not error %}
         <div class="alert success fade-in">
             <i class="fas fa-check-circle"></i>
             <div>
-                <strong>Succès :</strong> L'analyse a généré {{ groups|length }} groupes avec un taux d'affectation de 
-                {% set all_assigned_ofs = [] %}
-                {% for group in groups %}
-                    {% set _ = all_assigned_ofs.extend(group.ofs) %}
+                <strong>Succès :</strong> 
+                {% set productible_groups = groups|selectattr("has_ps")|list %}
+                {% set productible_ofs_count = namespace(value=0) %}
+                {% for group in productible_groups %}
+                    {% set productible_ofs_count.value = productible_ofs_count.value + group.ofs|length %}
                 {% endfor %}
-                {% set assigned_ofs = all_assigned_ofs|length %}
-                {% set total_ofs = assigned_ofs + unassigned_ofs|length %}
+                
+                L'analyse a généré {{ groups|length }} groupes productibles avec {{ productible_ofs_count.value }} OFs.
+                
+                {% set total_ofs = productible_ofs_count.value + unassigned_ofs|length %}
+                
+                Taux d'affectation productible : 
                 {% if total_ofs > 0 %}
-                    {{ "%.1f"|format((assigned_ofs / total_ofs * 100)) }}%
+                    {{ "%.1f"|format((productible_ofs_count.value / total_ofs * 100)) }}%
                 {% else %}
                     0%
                 {% endif %}.
@@ -730,12 +789,6 @@
                         <i class="fas fa-layer-group"></i>
                         Groupes ({{ groups|length }})
                     </button>
-                    {% if unassigned_ofs %}
-                    <button class="tab-btn" onclick="showTab('unassigned')">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        Non affectés ({{ unassigned_ofs|length }})
-                    </button>
-                    {% endif %}
                     <button class="tab-btn" onclick="showTab('summary')">
                         <i class="fas fa-chart-pie"></i>
                         Résumé
@@ -780,30 +833,6 @@
                                         <span class="group-info-label">Fenêtre Temporelle</span>
                                         <span class="group-info-value">{{ group.time_window or 'Non définie' }}</span>
                                     </div>
-                                    <!--
-                                    <div class="group-info-item">
-                                        <span class="group-info-label">Stock Total</span>
-                                        <span class="group-info-value">
-                                            {% if group.calculated_stocks and group.calculated_stocks.values()|sum > 0 %}
-                                                {{ "%.0f"|format(group.calculated_stocks.values()|sum) }}
-                                            {% elif group.remaining_stock and group.remaining_stock != 'Non calculé' and group.remaining_stock != '0.00' %}
-                                                {{ group.remaining_stock }}
-                                            {% else %}
-                                                {% set total_stock_from_ofs = namespace(value=0) %}
-                                                {% for of in group.ofs %}
-                                                    {% if of.remaining_stock and of.remaining_stock != 'N/A' %}
-                                                        {% set total_stock_from_ofs.value = total_stock_from_ofs.value + (of.remaining_stock|float|default(0)) %}
-                                                    {% endif %}
-                                                {% endfor %}
-                                                {% if total_stock_from_ofs.value > 0 %}
-                                                    {{ "%.0f"|format(total_stock_from_ofs.value) }}
-                                                {% else %}
-                                                    Non calculé
-                                                {% endif %}
-                                            {% endif %}
-                                        </span>
-                                    </div>
-                                    -->
                                     <div class="group-info-item">
                                         <span class="group-info-label">Nombre d'OFs</span>
                                         <span class="group-info-value">{{ group.ofs|length }}</span>
@@ -836,17 +865,16 @@
                                             <td>{{ of.Qty }}</td>
                                             <td>{{ of.X3_Date }}</td>
                                             <td>
-                                            <span class="status-badge {% if group.has_ps %}assigned{% else %}unassigned{% endif %}">
-                                                <i class="fas fa-{% if group.has_ps %}check{% else %}times{% endif %}"></i>
-                                                {% if group.has_ps %}
-                                                    Affecté
-                                                {% else %}
-                                                    Non affecté
-                                                {% endif %}
-                                            </span>
+                                                <span class="status-badge {% if group.has_ps %}assigned{% else %}unassigned{% endif %}">
+                                                    <i class="fas fa-{% if group.has_ps %}check{% else %}times{% endif %}"></i>
+                                                    {% if group.has_ps %}
+                                                        Affecté
+                                                    {% else %}
+                                                        Non affecté
+                                                    {% endif %}
+                                                </span>
                                             </td>
                                             <td>{{ of.remaining_stock or 'N/A' }}</td>
-
                                         </tr>
                                         {% endfor %}
                                     </tbody>
@@ -870,63 +898,6 @@
                     {% endif %}
                 </div>
 
-                <!-- Onglet des OFs non affectés -->
-                {% if unassigned_ofs %}
-                <div id="unassigned-tab" class="tab-content">
-                    <div class="filters">
-                        <input type="text" class="search-input" placeholder="Rechercher dans les OFs non affectés..." id="unassignedSearch" onkeyup="filterUnassigned()">
-                    </div>
-
-                    <div class="group-card">
-                        <div class="group-header" style="background: linear-gradient(135deg, var(--warning-color), #f59e0b);">
-                            <div class="group-title">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                Ordres de Fabrication Non Affectés
-                            </div>
-                            <span class="status-badge" style="background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.3);">
-                                {{ unassigned_ofs|length }} OFs
-                            </span>
-                        </div>
-                        
-                        <div class="group-ofs expanded">
-                            <table class="of-table" id="unassignedTable">
-                                <thead>
-                                    <tr>
-                                        <th>Part</th>
-                                        <th>Description</th>
-                                        <th>Order Code</th>
-                                        <th>FG</th>
-                                        <th>Qty</th>
-                                        <th>Date X3</th>
-                                        <th>Statut</th>
-                                        <th>remaining_stock</th> 
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for of in unassigned_ofs %}
-                                    <tr>
-                                        <td>{{ of.Part }}</td>
-                                        <td>{{ of.Description }}</td>
-                                        <td>{{ of.Order_Code }}</td>
-                                        <td>{{ of.FG }}</td>
-                                        <td>{{ of.Qty }}</td>
-                                        <td>{{ of.X3_Date }}</td>
-                                        <td>
-                                            <span class="status-badge unassigned">
-                                                <i class="fas fa-times"></i>
-                                                Non affecté
-                                            </span>
-                                        </td>
-                                        <td>{{ of.remaining_stock or 'N/A' }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
                 <!-- Onglet résumé -->
                 <div id="summary-tab" class="tab-content">
                     <div class="group-card">
@@ -938,32 +909,38 @@
                         </div>
                         
                         <div class="group-info">
-                            <!-- Calcul des métriques une seule fois -->
-                            {% set all_assigned_ofs = [] %}
+                            <!-- Calcul des métriques -->
+                            {% set productible_ofs_count = 0 %}
+                            {% set non_productible_ofs_count = 0 %}
+                            
                             {% for group in groups %}
-                                {% set _ = all_assigned_ofs.extend(group.ofs) %}
+                                {% if group.has_ps %}
+                                    {% set productible_ofs_count = productible_ofs_count + group.ofs|length %}
+                                {% else %}
+                                    {% set non_productible_ofs_count = non_productible_ofs_count + group.ofs|length %}
+                                {% endif %}
                             {% endfor %}
-                            {% set assigned_ofs_count = all_assigned_ofs|length %}
-                            {% set total_ofs_count = assigned_ofs_count + unassigned_ofs|length %}
+                            
+                            {% set total_ofs = productible_ofs_count + non_productible_ofs_count + unassigned_ofs|length %}
                             
                             <div class="group-info-grid">
                                 <div class="group-info-item">
                                     <span class="group-info-label">Total OFs traités</span>
-                                    <span class="group-info-value">{{ total_ofs_count }}</span>
+                                    <span class="group-info-value">{{ total_ofs }}</span>
                                 </div>
                                 <div class="group-info-item">
-                                    <span class="group-info-label">OFs affectés</span>
-                                    <span class="group-info-value">{{ assigned_ofs_count }}</span>
+                                    <span class="group-info-label">OFs productibles</span>
+                                    <span class="group-info-value">{{ productible_ofs_count }}</span>
                                 </div>
                                 <div class="group-info-item">
                                     <span class="group-info-label">Groupes créés</span>
                                     <span class="group-info-value">{{ groups|length }}</span>
                                 </div>
                                 <div class="group-info-item">
-                                    <span class="group-info-label">Taux de réussite</span>
+                                    <span class="group-info-label">Taux de productibilité</span>
                                     <span class="group-info-value">
-                                        {% if total_ofs_count > 0 %}
-                                            {{ "%.1f"|format((assigned_ofs_count / total_ofs_count * 100)) }}%
+                                        {% if total_ofs > 0 %}
+                                            {{ "%.1f"|format((productible_ofs_count / total_ofs * 100)) }}%
                                         {% else %}
                                             0%
                                         {% endif %}
@@ -1028,6 +1005,95 @@
                 </div>
             </div>
         </div>
+
+        <!-- SECTION DES OFs NON AFFECTÉS EN BAS -->
+<!-- SECTION DES VRAIS OFs NON AFFECTÉS EN BAS -->
+        {% if unassigned_ofs or non_productible_ofs_in_groups %}
+        <div class="unassigned-section fade-in">
+            <h3 class="unassigned-title">
+                <i class="fas fa-exclamation-triangle"></i>
+                Ordres de Fabrication Non Productibles ({{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs)
+            </h3>
+            
+            <div class="group-card">
+                <div class="group-header unassigned-header">
+                    <div class="group-title">
+                        <i class="fas fa-list"></i>
+                        Liste des OFs non productibles
+                    </div>
+                    <span class="status-badge unassigned-count">
+                        {{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs
+                    </span>
+                </div>
+                
+                <div class="group-ofs expanded">
+                    <table class="of-table">
+                        <thead>
+                            <tr>
+                                <th>Part</th>
+                                <th>Description</th>
+                                <th>Order Code</th>
+                                <th>FG</th>
+                                <th>Qty</th>
+                                <th>Date X3</th>
+                                <th>Statut</th>
+                                <th>remaining_stock</th> 
+                                <th>Raison</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- OFs complètement non affectés -->
+                            {% for of in unassigned_ofs %}
+                            <tr>
+                                <td>{{ of.Part }}</td>
+                                <td>{{ of.Description }}</td>
+                                <td>{{ of.Order_Code }}</td>
+                                <td>{{ of.FG }}</td>
+                                <td>{{ of.Qty }}</td>
+                                <td>{{ of.X3_Date }}</td>
+                                <td>
+                                    <span class="status-badge unassigned">
+                                        <i class="fas fa-times"></i>
+                                        Non affecté
+                                    </span>
+                                </td>
+                                <td>{{ of.remaining_stock or 'N/A' }}</td>
+                                <td>Non groupé</td>
+                            </tr>
+                            {% endfor %}
+                            
+                            <!-- OFs dans des groupes sans PS -->
+                            {% for of in non_productible_ofs_in_groups %}
+                            <tr>
+                                <td>{{ of.Part }}</td>
+                                <td>{{ of.Description }}</td>
+                                <td>{{ of.Order_Code }}</td>
+                                <td>{{ of.FG }}</td>
+                                <td>{{ of.Qty }}</td>
+                                <td>{{ of.X3_Date }}</td>
+                                <td>
+                                    <span class="status-badge unassigned">
+                                        <i class="fas fa-times"></i>
+                                        Non productible
+                                    </span>
+                                </td>
+                                <td>{{ of.remaining_stock or 'N/A' }}</td>
+                                <td>Groupe sans PS</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    
+                    {% if (unassigned_ofs|length + non_productible_ofs_in_groups|length) > 10 %}
+                    <div class="unassigned-footer">
+                        <i class="fas fa-info-circle"></i>
+                        {{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs non productibles au total
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <script>
@@ -1118,21 +1184,6 @@
             });
         }
 
-        // Filtrage des OFs non affectés
-        function filterUnassigned() {
-            const searchTerm = document.getElementById('unassignedSearch').value.toLowerCase();
-            const rows = document.querySelectorAll('#unassignedTable tbody tr');
-            
-            rows.forEach(row => {
-                const rowText = row.textContent.toLowerCase();
-                if (rowText.includes(searchTerm)) {
-                    row.style.display = 'table-row';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        }
-
         // Télécharger les résultats
         function downloadResults() {
             // Créer un lien de téléchargement vers le fichier de sortie
@@ -1186,7 +1237,6 @@
             if (e.key === 'Escape') {
                 document.querySelectorAll('.search-input').forEach(input => {
                     input.value = '';
-                    input.dispatchEvent(new Event('keyup'));
                 });
             }
         });

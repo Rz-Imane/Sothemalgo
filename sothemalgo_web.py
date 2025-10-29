@@ -50,7 +50,7 @@ def parse_output_file(file_path):
                     'ps_product': '',
                     'time_window': '',
                     'remaining_stock': '',
-                    'calculated_stocks': {},  # Pour stocker tous les stocks calculés
+                    'calculated_stocks': {},
                     'ofs': []
                 }
                 in_group = True
@@ -70,7 +70,6 @@ def parse_output_file(file_path):
                     in_calculated_stocks = True
                     continue
                 elif in_calculated_stocks and line.startswith('#') and ':' in line and 'unités' in line:
-                    # Ligne de stock calculé détaillé (ex: "# PS1(A): 100 unités")
                     stock_line = line.replace('#', '').strip()
                     if ':' in stock_line and 'unités' in stock_line:
                         product_part = stock_line.split(':')[0].strip()
@@ -117,20 +116,33 @@ def parse_output_file(file_path):
                     elif current_group:
                         current_group['ofs'].append(of_data)
         
-        # CORRECTION : Cette partie doit être DEDANS le try, mais APRÈS la boucle for line
         if current_group:
             groups.append(current_group)
             
-        # CORRECTION : Ajouter le calcul de has_ps pour chaque groupe
+        # CORRECTION : Identifier les groupes AVEC PS comme "productibles"
+        groups_with_ps = []
+        groups_without_ps = []
+        
         for group in groups:
             # Vérifier si le groupe contient des PS
-            has_ps = any(
-                of.get('Part', '').startswith('PS') 
-                for of in group.get('ofs', [])
-            )
-            group['has_ps'] = has_ps
-            
-        return {'groups': groups, 'unassigned_ofs': unassigned_ofs}
+            has_ps = any(of.get('Part', '').startswith('PS') for of in group.get('ofs', []))
+            if has_ps:
+                group['has_ps'] = True
+                groups_with_ps.append(group)
+            else:
+                group['has_ps'] = False
+                groups_without_ps.append(group)
+        
+        # Les OFs vraiment non affectés = OFs non groupés + OFs des groupes sans PS
+        truly_unassigned_ofs = unassigned_ofs.copy()
+        for group in groups_without_ps:
+            truly_unassigned_ofs.extend(group['ofs'])
+        
+        return {
+            'groups': groups_with_ps,  # Uniquement les groupes AVEC PS
+            'unassigned_ofs': truly_unassigned_ofs,
+            'non_productible_groups': groups_without_ps  # Pour information
+        }
         
     except Exception as e:
         return {'error': f'Erreur lors du parsing du fichier: {str(e)}', 'groups': [], 'unassigned_ofs': []}
