@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SothemaAL - Visualisation des Données</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0a;
+            min-height: 100vh;
+            padding: 20px;
+            font-size: 26px;
+            color: #ffffff;
+            overflow-x: hidden;
+            position: relative;
+            transform: translateZ(0);
+            will-change: auto;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(0, 255, 135, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(58, 123, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(147, 51, 234, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+            animation: float 30s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { 
+                transform: translate(0px, 0px) rotate(0deg) scale(1); 
+            }
+            33% { 
+                transform: translate(30px, -30px) rotate(120deg) scale(1.1); 
+            }
+            66% { 
+                transform: translate(-20px, 20px) rotate(240deg) scale(0.9); 
+            }
+        }
+
+        .container {
+            max-width: 98%;
+            margin: 0 auto;
+            background: rgba(20, 20, 20, 0.95);
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 
+                0 0 50px rgba(0, 255, 135, 0.1),
+                0 0 100px rgba(58, 123, 255, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+
+        .header {
+            background: linear-gradient(135deg, 
+                rgba(0, 255, 135, 0.1) 0%, 
+                rgba(58, 123, 255, 0.1) 50%, 
+                rgba(147, 51, 234, 0.1) 100%);
+            color: white;
+            padding: 60px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 4.2em;
+            font-weight: 800;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #00ff87, #3a7bff, #9333ea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 50px rgba(0, 255, 135, 0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.8;
+            margin-top: 15px;
+        }
+
+        .content {
+            padding: 60px;
+        }
+
+        .nav-buttons {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 20px 40px;
+            margin: 0 15px;
+            border-radius: 15px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            transition: all 0.2s ease;
+            border: 2px solid rgba(0, 255, 135, 0.3);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: linear-gradient(45deg, rgba(0, 255, 135, 0.1), rgba(58, 123, 255, 0.1));
+            transition: all 0.2s ease;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, rgba(0, 255, 135, 0.1), rgba(58, 123, 255, 0.1));
+            color: #00ff87;
+            border-color: #00ff87;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 30px rgba(0, 255, 135, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .stats-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, 
+                rgba(0, 255, 135, 0.1) 0%, 
+                rgba(58, 123, 255, 0.1) 50%, 
+                rgba(147, 51, 234, 0.1) 100%);
+            border: 1px solid rgba(0, 255, 135, 0.2);
+            color: white;
+            padding: 40px 30px;
+            border-radius: 20px;
+            text-align: center;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(5px);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 40px rgba(0, 255, 135, 0.2);
+            border-color: rgba(0, 255, 135, 0.4);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(0, 255, 135, 0.1), transparent);
+            transform: rotate(45deg);
+            transition: all 0.5s;
+            opacity: 0;
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+            transform: rotate(45deg) translate(100%, 100%);
+        }
+
+        .stat-number {
+            font-size: 3.5em;
+            font-weight: bold;
+            display: block;
+            color: #00ff87;
+            text-shadow: 0 0 20px rgba(0, 255, 135, 0.5);
+            position: relative;
+            z-index: 1;
+            margin-bottom: 15px;
+        }
+
+        .stat-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+            color: #ffffff;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 40px;
+            margin-bottom: 50px;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(5px);
+            transition: all 0.2s ease;
+        }
+
+        .chart-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 40px rgba(0, 255, 135, 0.1);
+            border-color: rgba(0, 255, 135, 0.2);
+        }
+
+        .chart-container h3 {
+            color: #ffffff;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 1.6em;
+            font-weight: 700;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(0, 255, 135, 0.3);
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            margin-bottom: 25px;
+        }
+
+        .timeline {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 50px;
+            backdrop-filter: blur(5px);
+        }
+
+        .timeline h3 {
+            color: #ffffff;
+            margin-bottom: 35px;
+            text-align: center;
+            font-size: 1.8em;
+            font-weight: 700;
+        }
+
+        .timeline-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            padding: 25px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .timeline-step:hover {
+            transform: translateX(10px);
+            box-shadow: 0 0 30px rgba(0, 255, 135, 0.1);
+            border-color: rgba(0, 255, 135, 0.2);
+        }
+
+        .timeline-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00ff87, #3a7bff);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 25px;
+            font-size: 1.8em;
+            font-weight: bold;
+            box-shadow: 0 0 20px rgba(0, 255, 135, 0.3);
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+
+        .timeline-desc {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.1em;
+            line-height: 1.4;
+        }
+
+        .timeline-duration {
+            background: rgba(0, 255, 135, 0.1);
+            color: #00ff87;
+            border: 1px solid rgba(0, 255, 135, 0.3);
+            padding: 8px 18px;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 80px;
+            color: #ffffff;
+            font-size: 1.3em;
+        }
+
+        .error {
+            background: rgba(220, 53, 69, 0.1);
+            color: #ff6b7a;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            padding: 25px;
+            border-radius: 15px;
+            margin: 30px 0;
+            font-size: 1.1em;
+        }
+
+        .last-update {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.1em;
+            margin-top: 40px;
+            padding: 25px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-wrapper {
+                height: 350px;
+            }
+            
+            .stats-overview {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+
+            .timeline-step {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .timeline-icon {
+                margin-right: 0;
+                margin-bottom: 20px;
+            }
+
+            body {
+                font-size: 22px;
+            }
+
+            .header h1 {
+                font-size: 3.2em;
+            }
+
+            .content {
+                padding: 40px 30px;
+            }
+
+            .header {
+                padding: 40px 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SothemaAL</h1>
+            <p>Visualisation des Données</p>
+        </div>
+
+        <div class="content">
+            <div class="nav-buttons">
+                <a href="/" class="btn btn-primary">🏠 Retour à l'Accueil</a>
+                <a href="/display-output" class="btn btn-secondary">📋 Voir les Résultats</a>
+                <button onclick="refreshData()" class="btn btn-secondary" id="refreshBtn">🔄 Actualiser</button>
+            </div>
+
+            <div id="loadingIndicator" class="loading">
+                <h3>⏳ Chargement des données...</h3>
+            </div>
+
+            <div id="mainContent" style="display: none;">
+                <!-- Statistics Overview -->
+                <div class="stats-overview">
+                    <div class="stat-card">
+                        <span class="stat-number" id="totalGroups">-</span>
+                        <div class="stat-label">Groupes Créés</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="totalOfs">-</span>
+                        <div class="stat-label">Total OFs</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="assignedOfs">-</span>
+                        <div class="stat-label">OFs Assignés</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="efficiency">-</span>
+                        <div class="stat-label">Efficacité (%)</div>
+                    </div>
+                </div>
+
+                <!-- Timeline Process -->
+                <div class="timeline">
+                    <h3>🔄 Flux de Traitement des Données</h3>
+                    <div id="timelineSteps"></div>
+                </div>
+
+                <!-- Charts Grid -->
+                <div class="charts-grid">
+                    <!-- Distribution des OFs -->
+                    <div class="chart-container">
+                        <h3>📊 Distribution des OFs par Groupe</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="ofDistributionChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Efficacité par Groupe -->
+                    <div class="chart-container">
+                        <h3>📈 Efficacité par Groupe</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="groupEfficiencyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Distribution par Catégorie -->
+                    <div class="chart-container">
+                        <h3>🏷️ Distribution par Catégorie</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Volume par Période -->
+                    <div class="chart-container">
+                        <h3>📦 Volume par Période</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="volumeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Métriques de Performance -->
+                    <div class="chart-container">
+                        <h3>⚡ Métriques de Performance</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Chart -->
+                    <div class="chart-container">
+                        <h3>⏱️ Durée des Étapes</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="last-update" id="lastUpdate">
+                    Dernière mise à jour: -
+                </div>
+            </div>
+
+            <div id="errorMessage" class="error" style="display: none;">
+                Erreur lors du chargement des données. Utilisation des données de démonstration.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration globale des graphiques
+        Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+        Chart.defaults.color = '#ffffff';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+        Chart.defaults.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+
+        // Variables globales
+        let charts = {};
+        let currentData = null;
+
+        // Palette de couleurs GitHub Copilot
+        const colors = {
+            primary: '#00ff87',
+            secondary: '#3a7bff',
+            tertiary: '#9333ea',
+            success: '#00ff87',
+            warning: '#ffaa00',
+            danger: '#ff4757',
+            info: '#3a7bff',
+            light: 'rgba(255, 255, 255, 0.1)',
+            dark: 'rgba(0, 0, 0, 0.8)'
+        };
+
+        // Charger les données depuis l'API
+        async function loadVisualizationData() {
+            try {
+                const response = await fetch('/api/visualization-data');
+                if (!response.ok) {
+                    throw new Error('Erreur lors du chargement des données');
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Erreur:', error);
+                // Données de fallback en cas d'erreur
+                return {
+                    statistics: {
+                        totalGroups: 0,
+                        totalOfs: 0,
+                        assignedOfs: 0,
+                        efficiency: 0
+                    },
+                    ofDistribution: {},
+                    categoryDistribution: {},
+                    groupEfficiency: {},
+                    timeline: [],
+                    performanceMetrics: {
+                        processing_time: 0,
+                        memory_usage: 0,
+                        cpu_usage: 0,
+                        success_rate: 0
+                    },
+                    volumeData: {},
+                    lastUpdate: new Date().toISOString()
+                };
+            }
+        }
+
+        // Mettre à jour les statistiques
+        function updateStatistics(data) {
+            const stats = data.statistics;
+            document.getElementById('totalGroups').textContent = stats.totalGroups;
+            document.getElementById('totalOfs').textContent = stats.totalOfs;
+            document.getElementById('assignedOfs').textContent = stats.assignedOfs;
+            document.getElementById('efficiency').textContent = stats.efficiency + '%';
+        }
+
+        // Mettre à jour la timeline
+        function updateTimeline(data) {
+            const timelineContainer = document.getElementById('timelineSteps');
+            timelineContainer.innerHTML = '';
+
+            data.timeline.forEach((step, index) => {
+                const stepElement = document.createElement('div');
+                stepElement.className = 'timeline-step';
+                
+                const statusIcon = step.status === 'completed' ? '✅' : '⏳';
+                
+                stepElement.innerHTML = `
+                    <div class="timeline-icon">${index + 1}</div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">${statusIcon} ${step.step}</div>
+                        <div class="timeline-desc">Durée: ${step.duration}s</div>
+                    </div>
+                    <div class="timeline-duration">${step.duration}s</div>
+                `;
+                
+                timelineContainer.appendChild(stepElement);
+            });
+        }
+
+        // Créer le graphique de distribution des OFs
+        function createOFDistributionChart(data) {
+            const ctx = document.getElementById('ofDistributionChart').getContext('2d');
+            
+            if (charts.ofDistribution) {
+                charts.ofDistribution.destroy();
+            }
+
+            const labels = Object.keys(data.ofDistribution);
+            const values = Object.values(data.ofDistribution);
+
+            charts.ofDistribution = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: [
+                            'rgba(0, 255, 135, 0.8)',
+                            'rgba(58, 123, 255, 0.8)',
+                            'rgba(147, 51, 234, 0.8)',
+                            'rgba(255, 170, 0, 0.8)',
+                            'rgba(255, 71, 87, 0.8)',
+                            'rgba(0, 200, 255, 0.8)',
+                            'rgba(255, 100, 200, 0.8)',
+                            'rgba(150, 255, 100, 0.8)'
+                        ],
+                        borderWidth: 2,
+                        borderColor: 'rgba(255, 255, 255, 0.2)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 25,
+                                usePointStyle: true,
+                                color: '#ffffff',
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Créer le graphique d'efficacité par groupe
+        function createGroupEfficiencyChart(data) {
+            const ctx = document.getElementById('groupEfficiencyChart').getContext('2d');
+            
+            if (charts.groupEfficiency) {
+                charts.groupEfficiency.destroy();
+            }
+
+            const labels = Object.keys(data.groupEfficiency);
+            const values = Object.values(data.groupEfficiency);
+
+            charts.groupEfficiency = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Efficacité (%)',
+                        data: values,
+                        backgroundColor: 'rgba(0, 255, 135, 0.8)',
+                        borderColor: '#00ff87',
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Créer le graphique de catégories
+        function createCategoryChart(data) {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            
+            if (charts.category) {
+                charts.category.destroy();
+            }
+
+            const labels = Object.keys(data.categoryDistribution);
+            const values = Object.values(data.categoryDistribution);
+
+            charts.category = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: [
+                            'rgba(0, 255, 135, 0.8)',
+                            'rgba(58, 123, 255, 0.8)',
+                            'rgba(147, 51, 234, 0.8)',
+                            'rgba(255, 170, 0, 0.8)',
+                            'rgba(255, 71, 87, 0.8)'
+                        ],
+                        borderWidth: 2,
+                        borderColor: 'rgba(255, 255, 255, 0.2)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 25,
+                                usePointStyle: true,
+                                color: '#ffffff',
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Créer le graphique de volume
+        function createVolumeChart(data) {
+            const ctx = document.getElementById('volumeChart').getContext('2d');
+            
+            if (charts.volume) {
+                charts.volume.destroy();
+            }
+
+            const labels = Object.keys(data.volumeData);
+            const values = Object.values(data.volumeData);
+
+            charts.volume = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Volume',
+                        data: values,
+                        borderColor: '#3a7bff',
+                        backgroundColor: 'rgba(58, 123, 255, 0.2)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#3a7bff',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Créer le graphique de performance
+        function createPerformanceChart(data) {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            
+            if (charts.performance) {
+                charts.performance.destroy();
+            }
+
+            const metrics = data.performanceMetrics;
+            
+            charts.performance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Temps de traitement', 'Usage mémoire', 'Usage CPU', 'Taux de succès'],
+                    datasets: [{
+                        label: 'Performance',
+                        data: [
+                            Math.min(100, (60 - metrics.processing_time) * 2), // Inverse du temps
+                            100 - metrics.memory_usage, // Inverse de l'usage mémoire
+                            100 - metrics.cpu_usage, // Inverse de l'usage CPU
+                            metrics.success_rate
+                        ],
+                        borderColor: '#9333ea',
+                        backgroundColor: 'rgba(147, 51, 234, 0.3)',
+                        pointBackgroundColor: '#9333ea',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            pointLabels: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)',
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Créer le graphique de timeline
+        function createTimelineChart(data) {
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            
+            if (charts.timelineChart) {
+                charts.timelineChart.destroy();
+            }
+
+            const labels = data.timeline.map(step => step.step);
+            const durations = data.timeline.map(step => step.duration);
+
+            charts.timelineChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Durée (s)',
+                        data: durations,
+                        backgroundColor: 'rgba(255, 170, 0, 0.8)',
+                        borderColor: '#ffaa00',
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#ffffff',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Mettre à jour la dernière mise à jour
+        function updateLastUpdate(data) {
+            const lastUpdateElement = document.getElementById('lastUpdate');
+            if (data.lastUpdate) {
+                const date = new Date(data.lastUpdate);
+                lastUpdateElement.textContent = `Dernière mise à jour: ${date.toLocaleString('fr-FR')}`;
+            }
+        }
+
+        // Fonction principale de chargement
+        async function loadData() {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const mainContent = document.getElementById('mainContent');
+            const errorMessage = document.getElementById('errorMessage');
+            const refreshBtn = document.getElementById('refreshBtn');
+
+            // Afficher le chargement
+            loadingIndicator.style.display = 'block';
+            mainContent.style.display = 'none';
+            errorMessage.style.display = 'none';
+            refreshBtn.disabled = true;
+
+            try {
+                currentData = await loadVisualizationData();
+
+                // Mettre à jour l'interface
+                updateStatistics(currentData);
+                updateTimeline(currentData);
+                
+                // Créer les graphiques
+                createOFDistributionChart(currentData);
+                createGroupEfficiencyChart(currentData);
+                createCategoryChart(currentData);
+                createVolumeChart(currentData);
+                createPerformanceChart(currentData);
+                createTimelineChart(currentData);
+                
+                updateLastUpdate(currentData);
+
+                // Afficher le contenu
+                loadingIndicator.style.display = 'none';
+                mainContent.style.display = 'block';
+
+            } catch (error) {
+                console.error('Erreur lors du chargement:', error);
+                loadingIndicator.style.display = 'none';
+                errorMessage.style.display = 'block';
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // Fonction pour actualiser les données
+        function refreshData() {
+            loadData();
+        }
+
+        // Charger les données au démarrage
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+        });
+    </script>
+</body>
+</html>
