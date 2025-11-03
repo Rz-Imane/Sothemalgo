@@ -110,6 +110,10 @@ def parse_output_file(file_path):
                         'Delay': parts[11] if len(parts) > 11 else '',
                         'remaining_stock': parts[12] if len(parts) > 12 else 'N/A'
                     }
+                    if in_unassigned:
+                        of_data['Statut'] = 'Non affecté'
+                    else:
+                        of_data['Statut'] = 'Affecté' if of_data.get('GRP_FLG') else 'Non affecté'
                     
                     if in_unassigned:
                         unassigned_ofs.append(of_data)
@@ -120,28 +124,42 @@ def parse_output_file(file_path):
             groups.append(current_group)
             
         # CORRECTION : Identifier les groupes AVEC PS comme "productibles"
-        groups_with_ps = []
-        groups_without_ps = []
+        groups_with_supply = []
+        groups_without_supply = []
         
         for group in groups:
-            # Vérifier si le groupe contient des PS
-            has_ps = any(of.get('Part', '').startswith('PS') for of in group.get('ofs', []))
-            if has_ps:
-                group['has_ps'] = True
-                groups_with_ps.append(group)
+            ofs_in_group = group.get('ofs', [])
+            ps_product = (group.get('ps_product') or '').strip()
+            
+            supply_present = False
+            if ps_product:
+                supply_present = any((of.get('Part') or '').strip() == ps_product for of in ofs_in_group)
+            
+            if not supply_present:
+                supply_present = any((of.get('Part') or '').startswith('PS') for of in ofs_in_group)
+            
+            group['has_supply'] = supply_present
+            group['has_ps'] = supply_present
+            
+            if supply_present:
+                groups_with_supply.append(group)
             else:
-                group['has_ps'] = False
-                groups_without_ps.append(group)
+                groups_without_supply.append(group)
         
-        # Les OFs vraiment non affectés = OFs non groupés + OFs des groupes sans PS
-        truly_unassigned_ofs = unassigned_ofs.copy()
-        for group in groups_without_ps:
-            truly_unassigned_ofs.extend(group['ofs'])
+        groups_for_display = groups_with_supply if groups_with_supply else groups
+        
+        truly_unassigned_ofs = list(unassigned_ofs)
+        for group in groups_without_supply:
+            for of in group.get('ofs', []):
+                of_copy = dict(of)
+                if of_copy.get('Statut') == 'Affecté':
+                    of_copy['Statut'] = 'Non affecté'
+                truly_unassigned_ofs.append(of_copy)
         
         return {
-            'groups': groups_with_ps,  # Uniquement les groupes AVEC PS
+            'groups': groups_for_display,
             'unassigned_ofs': truly_unassigned_ofs,
-            'non_productible_ofs_in_groups': [of for group in groups_without_ps for of in group['ofs']]  # ← AJOUTER CETTE LIGNE
+            'non_productible_ofs_in_groups': [of for group in groups_without_supply for of in group.get('ofs', [])]
         }
         
     except Exception as e:
@@ -280,7 +298,12 @@ def index():
                 operations_map,
                 params=smoothing_params # Contient output_file_path, log_file_path, etc.
             )
-            
+            # 3.2. (NOUVEAU) recalculer les stocks individuels par groupe AVANT d'écrire
+            for g in groups:
+                # le nom exact dépend de ce que tu as dans sothemalgo_grouper
+                # j’utilise un nom générique que tu avais montré
+                if hasattr(g, "calculate_consumption"):
+                    g.calculate_consumption(bom_data if bom_data else [])
             # 3.5. Générer le fichier de sortie
             write_grouped_needs_to_file(smoothing_params['output_file_path'], groups, final_updated_ofs)
             
@@ -295,10 +318,7 @@ def index():
                 # For unassigned OFs, we don't need complex stock mapping anymore
                 # because individual stock is now included in the output file
                 for of in parsed_data.get('unassigned_ofs', []):
-                    # The individual stock should already be in the 'remaining_stock' field
-                    # from the parse_output_file function
-                    if not of.get('remaining_stock'):
-                        of['remaining_stock'] = 'N/A'
+                    of['remaining_stock'] = '0.00'
 
                 print("✅ Final parsed data - Individual stocks should be available now")
                 print(f"✅ Sample OF data: {parsed_data.get('unassigned_ofs', [])[:1] if parsed_data.get('unassigned_ofs') else 'No unassigned OFs'}")

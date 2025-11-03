@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, time, date
-from collections import defaultdict
+from collections import defaultdict, deque
 import calendar
 import csv
 import os
@@ -9,6 +9,24 @@ HORIZON_H_MONTHS = 2
 HORIZON_H_WEEKS = 10
 POST_DEFAULT_CAPACITY_HOURS_WEEK = 35
 ADVANCE_RETREAT_WEEKS = 3
+
+def try_parse_float(value):
+    """
+    Convert numeric strings that may use locale-specific separators into float.
+    Raises ValueError when conversion is not possible.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    if value is None:
+        raise ValueError("Cannot parse None as float.")
+    text = str(value).strip()
+    if not text:
+        raise ValueError("Cannot parse empty string as float.")
+    sanitized = text.replace('\u00a0', '').replace(' ', '')
+    if sanitized.count(',') > 0 and sanitized.count('.') > 0:
+        sanitized = sanitized.replace('.', '')
+    sanitized = sanitized.replace(',', '.')
+    return float(sanitized)
 
 # --- Data Structures ---
 class ManufacturingOrder:
@@ -28,7 +46,10 @@ class ManufacturingOrder:
                     self.need_date = datetime.strptime(need_date_str, "%d/%m/%y")
                 except ValueError:
                     raise ValueError(f"Date format for {need_date_str} not recognized.")
-        self.quantity = float(quantity)
+        # on garde la valeur EXACTE du fichier pour la réécriture
+        self.source_qty = str(quantity) if quantity is not None else ""
+        # on garde aussi la version numérique pour les calculs
+        self.quantity = try_parse_float(quantity)
         self.unit = unit
         self.assigned_group_id = None
         self.status = "UNASSIGNED"
@@ -52,7 +73,7 @@ class BOMEntry:
     def __init__(self, parent_product_id, child_product_id, quantity_child_per_parent, child_bom_level):
         self.parent_product_id = parent_product_id
         self.child_product_id = child_product_id
-        self.quantity_child_per_parent = float(quantity_child_per_parent)
+        self.quantity_child_per_parent = try_parse_float(quantity_child_per_parent)
         self.child_bom_level = int(child_bom_level)
 
     def __repr__(self):
@@ -70,9 +91,9 @@ class Group:
         self.component_stocks = {}
         
         # Track individual product stock for each OF
-        self.individual_product_stocks = {}  # {product_id: current_stock}
+        self.individual_product_stocks = {}  # {product_id: group-level remaining stock}
         
-        # Track product consumption
+        # Track product consumption (diagnostic)
         self.product_consumption = {}  # {product_id: total_consumed_quantity}
         
         self.add_of(initial_ps_of, ps_quantity_change=initial_ps_of.quantity)
@@ -81,130 +102,172 @@ class Group:
         self.ofs.append(of_to_add)
         self.current_ps_stock_available += ps_quantity_change
         
-        # Update component stocks
+        # Update component stocks (balance-style tracker)
         if of_to_add.product_id not in self.component_stocks:
             self.component_stocks[of_to_add.product_id] = 0
         self.component_stocks[of_to_add.product_id] += ps_quantity_change
         
-        # Update individual product stock - MAINTENANT ON NE MODIFIE PLUS LES STOCKS ICI
-        # Les stocks seront calculés uniquement dans calculate_consumption
+        # Initial fields for per-OF tracking (actual values computed later)
         product_id = of_to_add.product_id
-        
-        # Initialize if not exists
         if product_id not in self.individual_product_stocks:
             self.individual_product_stocks[product_id] = 0
         if product_id not in self.product_consumption:
             self.product_consumption[product_id] = 0
-        
-        # NE PAS ajouter automatiquement au stock ici
-        # Le stock sera calculé dans calculate_consumption
-        
-        # Stock temporaire à 0, sera calculé plus tard
+
         of_to_add.individual_product_stock = 0
-        
         of_to_add.assigned_group_id = self.id
         of_to_add.status = "ASSIGNED"
 
     def calculate_consumption(self, bom_data):
-        print(f"  🟢 CALCUL DES STOCKS APPELE POUR GROUPE {self.id}")
-        
-        def sorting_key(of):
-            type_priority = {"PS": 0, "SF": 1, "PF": 2}
-            return (of.need_date, type_priority.get(of.product_type, 3), of.id)
-        
-        sorted_ofs = sorted(self.ofs, key=sorting_key)
-        stocks = {}
-        production_status = {}
-        
-        # NOUVEAU : Stocker la contribution de chaque OF
-        of_contributions = {}
+        """
+        Recalcule les stocks restants par OF avec FIFO, en normalisant violemment les IDs produit.
+        """
+        from collections import defaultdict, deque
+
+        # --- 1. normalisation super agressive ---
+        def norm(x):
+            if x is None:
+                return ""
+            s = str(x)
+            s = s.replace('\ufeff', '')  # BOM éventuel
+            # enlève TOUS les espaces/blancs (même insécables)
+            s = ''.join(s.split())
+            s = s.upper()
+            return s
+
+        print(f"[CONSUMP] === Calcul consommation pour le groupe {self.id} ===")
+
+        # --- 2. indexer la nomenclature avec IDs normalisés ---
+        bom_lookup = defaultdict(list)
+        parents = set()
+        children = set()
+        for bom in bom_data:
+            p = norm(bom.parent_product_id)
+            c = norm(bom.child_product_id)
+            bom_lookup[p].append((c, bom.quantity_child_per_parent))
+            parents.add(p)
+            children.add(c)
+
+        premix_products = {c for c in children if c not in parents}
+        type_priority = {"PS": 0, "SF": 1, "PF": 2}
+
+        # log des OFs du groupe
+        print("[CONSUMP] OFs dans le groupe :")
         for of in self.ofs:
-            of_contributions[of.id] = 0
-        
-        # Étape 1: Traiter la production
+            print(f"    - {of.id} | prod={norm(of.product_id)} | qty={of.quantity} | date={of.need_date.strftime('%Y-%m-%d')}")
+
+        # --- 3. ordre de traitement : premix d'abord, puis par niveau/date/type ---
+        sorted_ofs = sorted(
+            self.ofs,
+            key=lambda of: (
+                0 if norm(of.product_id) in premix_products else 1,
+                of.bom_level,
+                of.need_date,
+                type_priority.get(of.product_type, 3),
+            )
+        )
+
+        fifo_supply = defaultdict(deque)   # produit → deque de {of_id, remaining}
+        remaining_per_of = {of.id: 0.0 for of in self.ofs}
+        product_produced = defaultdict(float)
+        product_consumption = defaultdict(float)
+        component_balance = defaultdict(float)
+        production_status = {}
+        EPS = 1e-9
+
+        # --- 4. boucle principale ---
         for of in sorted_ofs:
-            product_id = of.product_id
-            
-            if of.product_type == "PS":
-                stocks[product_id] = stocks.get(product_id, 0) + of.quantity
-                production_status[of.id] = True
-                of_contributions[of.id] = of.quantity
-                continue
-                
-            # Calculer les besoins
+            prod_id = norm(of.product_id)
+            qty = float(of.quantity)
+
+            # besoins composants de CE produit
             components_needed = {}
-            for bom in bom_data:
-                if bom.parent_product_id == product_id:
-                    required_qty = bom.quantity_child_per_parent * of.quantity
-                    components_needed[bom.child_product_id] = required_qty
-            
-            # Vérifier la disponibilité
+            for child_id, q_child in bom_lookup.get(prod_id, []):
+                need = q_child * qty
+                if need > EPS:
+                    components_needed[child_id] = components_needed.get(child_id, 0.0) + need
+
+            # check dispo
             can_produce = True
-            for comp_id, required_qty in components_needed.items():
-                available = stocks.get(comp_id, 0)
-                if available < required_qty:
+            for comp_id, req in components_needed.items():
+                available = sum(e["remaining"] for e in fifo_supply.get(comp_id, []))
+                if available + EPS < req:
                     can_produce = False
                     break
-            
-            if can_produce:
-                # Consommer les composants
-                for comp_id, required_qty in components_needed.items():
-                    stocks[comp_id] -= required_qty
-                
-                # Produire
-                stocks[product_id] = stocks.get(product_id, 0) + of.quantity
-                production_status[of.id] = True
-                of_contributions[of.id] = of.quantity
-            else:
+
+            if not can_produce:
+                print(f"    -> pas assez de composants pour OF {of.id} ({prod_id}) : NON PRODUIT")
                 production_status[of.id] = False
-        
-        # Étape 2: CORRECTION - Calculer la consommation individuelle
-        # Recréer l'ordre de consommation pour savoir quel OF a été consommé
-        of_remaining = of_contributions.copy()
-        
-        # Recréer la consommation dans l'ordre chronologique
-        temp_stocks = {}
-        for of in sorted_ofs:
-            if of.product_type == "PS":
-                temp_stocks[of.product_id] = temp_stocks.get(of.product_id, 0) + of.quantity
-            elif of.product_type in ["SF", "PF"] and production_status[of.id]:
-                # Pour les SF/PF, calculer les besoins
-                components_needed = {}
-                for bom in bom_data:
-                    if bom.parent_product_id == of.product_id:
-                        required_qty = bom.quantity_child_per_parent * of.quantity
-                        components_needed[bom.child_product_id] = required_qty
-                
-                # Consommer depuis les OFs disponibles (FIFO)
-                for comp_id, required_qty in components_needed.items():
-                    remaining_need = required_qty
-                    # Consommer depuis les OFs dans l'ordre chronologique
-                    for supplier_of in sorted_ofs:
-                        if (supplier_of.product_id == comp_id and 
-                            production_status[supplier_of.id] and 
-                            of_remaining[supplier_of.id] > 0):
-                            
-                            can_take = min(remaining_need, of_remaining[supplier_of.id])
-                            of_remaining[supplier_of.id] -= can_take
-                            remaining_need -= can_take
-                            
-                            if remaining_need <= 0:
-                                break
-                
-                # Produire
-                if of.product_type == "SF":
-                    temp_stocks[of.product_id] = temp_stocks.get(of.product_id, 0) + of.quantity
-        
-        # Étape 3: Appliquer les stocks individuels
-        for of in self.ofs:
-            if of.product_type == "PF":
-                if production_status[of.id]:
-                    of.individual_product_stock = of.quantity
+                of.individual_product_stock = 0.0
+                remaining_per_of[of.id] = 0.0
+                continue
+
+            production_status[of.id] = True
+
+            # consommer FIFO
+            for comp_id, req in components_needed.items():
+                need_left = req
+                print(f"    consommation FIFO pour OF {of.id}: besoin composant {comp_id} = {req:.6f}")
+                while need_left > EPS and fifo_supply.get(comp_id):
+                    entry = fifo_supply[comp_id][0]
+                    take = min(entry["remaining"], need_left)
+                    entry["remaining"] -= take
+                    need_left -= take
+                    remaining_per_of[entry["of_id"]] -= take
+                    print(f"        prend {take:.6f} depuis OF {entry['of_id']} (reste sur ce lot={entry['remaining']:.6f})")
+                    if entry["remaining"] <= EPS:
+                        fifo_supply[comp_id].popleft()
+                product_consumption[comp_id] += req
+                component_balance[comp_id] -= req
+
+            # produire cet OF
+            fifo_supply[prod_id].append({"of_id": of.id, "remaining": qty})
+            remaining_per_of[of.id] += qty
+            component_balance[prod_id] += qty
+            product_produced[prod_id] += qty
+            print(f"    => produit {qty} de {prod_id} (lot OF {of.id})")
+
+        # --- 5. répartition finale par produit (FIFO) ---
+        for prod_id, total_prod in product_produced.items():
+            total_cons = product_consumption.get(prod_id, 0.0)
+            must_remain = max(0.0, total_prod - total_cons)
+
+            ofs_of_prod = [of for of in sorted_ofs if norm(of.product_id) == prod_id]
+            for of in ofs_of_prod:
+                cur = max(0.0, remaining_per_of[of.id])
+                if must_remain <= 0:
+                    remaining_per_of[of.id] = 0.0
                 else:
-                    of.individual_product_stock = 0
+                    take = min(cur, must_remain)
+                    remaining_per_of[of.id] = take
+                    must_remain -= take
+
+        # --- 6. écrire dans les OFs ---
+        print("\n[CONSUMP] Stocks finaux par OF (c’est CE chiffre qui doit aller dans le fichier) :")
+        for of in self.ofs:
+            if not production_status.get(of.id, False):
+                of.individual_product_stock = 0.0
             else:
-                # PS et SF affichent ce qui reste après consommation
-                of.individual_product_stock = of_remaining[of.id]
+                rem = max(0.0, remaining_per_of.get(of.id, 0.0))
+                # borne au qty de l’OF
+                rem = min(rem, of.quantity)
+                of.individual_product_stock = rem
+            print(f"    OF {of.id} ({norm(of.product_id)}) => stock restant = {of.individual_product_stock}")
+
+        # agrégats pour le groupe
+        self.product_consumption = dict(product_consumption)
+        self.individual_product_stocks = {
+            pid: sum(
+                max(0.0, remaining_per_of[o.id])
+                for o in self.ofs
+                if norm(o.product_id) == pid
+            )
+            for pid in {norm(o.product_id) for o in self.ofs}
+        }
+        self.component_stocks = dict(component_balance)
+
+        print(f"[CONSUMP] === Fin calcul groupe {self.id} ===\n")
+
 
 class Post:
     def __init__(self, id, name, default_capacity_hours_week=35, 
@@ -413,13 +476,31 @@ class Operation:
         self.product_key = product_key
         self.operation_name = operation_name
         self.post_id = post_id
-        self.standard_time_hours = standard_time_hours
+        self.standard_time_hours = try_parse_float(standard_time_hours)
         self.sequence = sequence
         self.priority = priority
 
 # --- Helper Functions ---
-def get_monday_of_week(d):
-    return d - timedelta(days=d.weekday())
+def detect_csv_delimiter(filepath, fallback=','):
+    """
+    Inspect the first non-empty line of a CSV-like file to infer its delimiter.
+    Returns the detected delimiter or the provided fallback when no clear candidate is found.
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8-sig') as f:
+            for line in f:
+                sample = line.strip()
+                if not sample:
+                    continue
+                potential_delims = ['\t', ';', ',', '|']
+                delim_counts = {delim: sample.count(delim) for delim in potential_delims}
+                best_delim, best_count = max(delim_counts.items(), key=lambda item: item[1])
+                if best_count > 0:
+                    return best_delim
+                break
+    except FileNotFoundError:
+        pass
+    return fallback
 
 def find_qty_of_component_in_product(product_to_make_id, component_to_find_id, bom_data, memo=None):
     if memo is None: memo = {}
@@ -457,56 +538,71 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
         base_client_of = unassigned_client_ofs[0]
         
         needed_components = {}
+        family_product_ids = {base_client_of.product_id}
         for bom_entry in bom_data:
             qty_needed = find_qty_of_component_in_product(base_client_of.product_id, bom_entry.child_product_id, bom_data)
             if qty_needed > 0:
-                needed_components[bom_entry.child_product_id] = qty_needed * base_client_of.quantity
+                total_qty_needed = qty_needed * base_client_of.quantity
+                needed_components[bom_entry.child_product_id] = needed_components.get(bom_entry.child_product_id, 0) + total_qty_needed
+                family_product_ids.add(bom_entry.child_product_id)
         
-        main_premix = None
-        premix_date = None
-        
-        best_premix_candidate = None
+        best_supply_candidate = None
         best_date_diff = float('inf')
-        
-        for comp_id, qty in needed_components.items():
-            ps_ofs = [of for of in all_ofs if of.product_id == comp_id and of.product_type == "PS" and of.assigned_group_id is None]
-            if ps_ofs:
-                closest_ps = min(ps_ofs, key=lambda x: abs((x.need_date - base_client_of.need_date).days))
-                date_diff = abs((closest_ps.need_date - base_client_of.need_date).days)
-                
+        for comp_id in needed_components.keys():
+            candidate_supply = [
+                of for of in all_ofs
+                if of.product_id == comp_id and of.assigned_group_id is None
+            ]
+            if candidate_supply:
+                closest_supply = min(candidate_supply, key=lambda x: abs((x.need_date - base_client_of.need_date).days))
+                date_diff = abs((closest_supply.need_date - base_client_of.need_date).days)
                 if date_diff < best_date_diff:
                     best_date_diff = date_diff
-                    best_premix_candidate = comp_id
-                    premix_date = closest_ps.need_date
+                    best_supply_candidate = closest_supply
         
-        main_premix = best_premix_candidate
-        
-        if not main_premix or not premix_date:
+        if best_supply_candidate:
+            main_premix = best_supply_candidate.product_id
+            reference_date = best_supply_candidate.need_date
+        else:
             main_premix = f"PS_GROUP_{group_counter}"
-            premix_date = base_client_of.need_date
+            reference_date = base_client_of.need_date
         
-        window_start_date_monday = get_monday_of_week(premix_date)
+        child_dates = []
+        for comp_id in needed_components.keys():
+            candidate_children = [
+                of for of in all_ofs
+                if of.product_id == comp_id and of.assigned_group_id is None
+            ]
+            if candidate_children:
+                earliest_child = min(candidate_children, key=lambda x: x.need_date)
+                child_dates.append(earliest_child.need_date)
+        
+        if child_dates:
+            window_start_date = min(child_dates)
+        else:
+            window_start_date = reference_date
         window_duration_td = timedelta(weeks=horizon_H_weeks_param)
-        window_end_date = window_start_date_monday + window_duration_td - timedelta(days=1)
+        window_end_date = window_start_date + window_duration_td - timedelta(days=1)
         
-        current_group = Group(f"GRP{group_counter}", main_premix, base_client_of, window_start_date_monday, window_end_date)
+        current_group = Group(f"GRP{group_counter}", main_premix, base_client_of, window_start_date, window_end_date)
         
         for comp_id, qty_needed in needed_components.items():
             current_group.component_stocks[comp_id] = -qty_needed
 
-        print(f"Created {current_group} with client OF {base_client_of.id}, premix window based on {main_premix} date {premix_date.strftime('%Y-%m-%d')}")
+        print(f"Created {current_group} with client OF {base_client_of.id}, window start {window_start_date.strftime('%Y-%m-%d')}, horizon {horizon_H_weeks_param}w")
 
         available_ps_ofs = [
             of for of in all_ofs 
             if of.product_type == "PS" and 
                of.assigned_group_id is None and
-               window_start_date_monday <= of.need_date <= window_end_date
+               window_start_date <= of.need_date <= window_end_date
         ]
         
         for ps_of in sorted(available_ps_ofs, key=lambda o: o.need_date):
             if ps_of.product_id in needed_components:
                 current_group.add_of(ps_of, ps_quantity_change=ps_of.quantity)
                 current_group.component_stocks[ps_of.product_id] += ps_of.quantity
+                family_product_ids.add(ps_of.product_id)
                 print(f"  Added Premix OF {ps_of.id} ({ps_of.product_id}) to {current_group.id}")
 
         other_client_ofs = [
@@ -514,7 +610,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
             if of.product_type in ["PF", "SF"] and 
                of.assigned_group_id is None and
                of.id != base_client_of.id and
-               window_start_date_monday <= of.need_date <= window_end_date
+               window_start_date <= of.need_date <= window_end_date
         ]
         
         for client_of in sorted(other_client_ofs, key=lambda o: o.need_date):
@@ -522,22 +618,25 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
             for bom_entry in bom_data:
                 qty_needed = find_qty_of_component_in_product(client_of.product_id, bom_entry.child_product_id, bom_data)
                 if qty_needed > 0:
-                    client_needed_components[bom_entry.child_product_id] = qty_needed * client_of.quantity
+                    total_needed = qty_needed * client_of.quantity
+                    client_needed_components[bom_entry.child_product_id] = client_needed_components.get(bom_entry.child_product_id, 0) + total_needed
             
-            same_family = False
-            for comp_id in client_needed_components.keys():
-                if comp_id in needed_components:
-                    same_family = True
-                    break
+            is_direct_component = client_of.product_id in family_product_ids
+            shared_components = any(comp_id in family_product_ids for comp_id in client_needed_components.keys())
+            same_family = is_direct_component or shared_components
             
             if same_family:
                 current_group.add_of(client_of, ps_quantity_change=0)
                 
                 if client_of.product_type == "SF":
-                    current_group.component_stocks[client_of.product_id] += client_of.quantity
+                    current_group.component_stocks[client_of.product_id] = current_group.component_stocks.get(client_of.product_id, 0) + client_of.quantity
                 
                 for comp_id, qty_needed in client_needed_components.items():
-                    current_group.component_stocks[comp_id] -= qty_needed
+                    current_group.component_stocks[comp_id] = current_group.component_stocks.get(comp_id, 0) - qty_needed
+                    needed_components[comp_id] = needed_components.get(comp_id, 0) + qty_needed
+                
+                family_product_ids.add(client_of.product_id)
+                family_product_ids.update(client_needed_components.keys())
                     
                 print(f"  Added family OF {client_of.id} ({client_of.product_type}) to {current_group.id}")
         
@@ -557,7 +656,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
 def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map, operations_map, params):
     print("\n--- Starting Detailed Smoothing and Scheduling ---")
 
-    print("🔍 DEBUG - Stocks avant scheduling:")
+    print("[DEBUG] Stocks avant scheduling:")
     for of in all_ofs_with_groups:
         if of.assigned_group_id:
             print(f"  {of.id} ({of.product_id}): stock = {of.individual_product_stock}")
@@ -699,7 +798,7 @@ def load_ofs_from_file(filepath):
     ofs = []
     try:
         with open(filepath, mode='r', encoding='utf-8-sig') as csvfile:
-            delimiter = ',' if 'test_' in filepath else '\t'
+            delimiter = detect_csv_delimiter(filepath, fallback='\t')
             reader = csv.DictReader(csvfile, delimiter=delimiter)
             
             expected_input_cols = ["Part", "Description", "Order Code", "FG", "CAT US FS", "Qty", "Date"]
@@ -713,7 +812,7 @@ def load_ofs_from_file(filepath):
             missing_cols = []
             for col_name in expected_input_cols:
                 mapped_col_name = header_map.get(col_name.lower())
-                if mapped_col_name:
+                if mapped_expected_cols is not None and mapped_col_name:
                     mapped_expected_cols[col_name] = mapped_col_name
                 else:
                     missing_cols.append(col_name)
@@ -732,7 +831,7 @@ def load_ofs_from_file(filepath):
                         print(f"Warning: Row {row_num}: Could not determine product_type from Part '{part_val}'. Defaulting to 'UNKNOWN'.")
                         product_type_derived = "UNKNOWN"
 
-                    cat_us_fs_raw = row[mapped_expected_cols["CAT US FS"]]
+                    cat_us_fs_raw = (row.get(mapped_expected_cols["CAT US FS"], "") or "").strip()
                     cat_us_fs_parts = cat_us_fs_raw.split()
 
                     cat_val = ""
@@ -795,7 +894,8 @@ def load_bom_from_file(filepath):
     bom_entries = []
     try:
         with open(filepath, mode='r', encoding='utf-8-sig') as csvfile:
-            reader = csv.DictReader(csvfile)
+            delimiter = detect_csv_delimiter(filepath, fallback=',')
+            reader = csv.DictReader(csvfile, delimiter=delimiter)
             required_cols = ["ParentProductID", "ChildProductID", "QuantityChildPerParent", "ChildBOMLevel"]
             if not reader.fieldnames or not all(col in reader.fieldnames for col in required_cols):
                 available_cols = reader.fieldnames if reader.fieldnames else []
@@ -831,7 +931,8 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
     
     try:
         with open(filepath_posts, mode='r', encoding='utf-8-sig') as csvfile:
-            reader = csv.DictReader(csvfile)
+            delimiter = detect_csv_delimiter(filepath_posts, fallback=',')
+            reader = csv.DictReader(csvfile, delimiter=delimiter)
             required_cols_posts = ["PostID", "PostName", "DefaultCapacityHoursWeek"]
             if not reader.fieldnames or not all(col in reader.fieldnames for col in required_cols_posts):
                 available_cols = reader.fieldnames if reader.fieldnames else []
@@ -846,7 +947,8 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
     
     try:
         with open(filepath_post_unavailability, mode='r', encoding='utf-8-sig') as csvfile:
-            reader = csv.DictReader(csvfile)
+            delimiter = detect_csv_delimiter(filepath_post_unavailability, fallback=',')
+            reader = csv.DictReader(csvfile, delimiter=delimiter)
             required_cols_unavail = ["PostID", "UnavailableStartDate", "UnavailableEndDate"]
             if not all(col in reader.fieldnames for col in required_cols_unavail):
                 raise ValueError(f"Post Unavailability CSV {filepath_post_unavailability} missing required columns. Need: {required_cols_unavail}, Found: {reader.fieldnames}")
@@ -864,7 +966,8 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
     operations_map = defaultdict(list)
     try:
         with open(filepath_operations, mode='r', encoding='utf-8-sig') as csvfile:
-            reader = csv.DictReader(csvfile)
+            delimiter = detect_csv_delimiter(filepath_operations, fallback=',')
+            reader = csv.DictReader(csvfile, delimiter=delimiter)
             required_cols_ops = ["ProductID", "OperationName", "PostID", "StandardTimeHours", "Sequence", "Priority"]
             if not all(col in reader.fieldnames for col in required_cols_ops):
                 raise ValueError(f"Operations CSV {filepath_operations} missing required columns. Need: {required_cols_ops}, Found: {reader.fieldnames}")
@@ -879,7 +982,7 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
                     product_key=key,
                     operation_name=row['OperationName'],
                     post_id=row['PostID'],
-                    standard_time_hours=float(row['StandardTimeHours']),
+                    standard_time_hours=row['StandardTimeHours'],
                     sequence=int(row['Sequence']),
                     priority=int(row.get('Priority', 1))
                 )
@@ -895,38 +998,43 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
 def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
     print(f"\nWriting grouped needs to {filepath}")
     
-    output_header = ["Part", "Description", "Order Code", "FG", "CAT", "US", "FS", "Qty", 
-                     "X3 Date", "GRP_FLG", "Start Date", "Delay", "Stock_Produit"]
+    output_header = [
+        "Part", "Description", "Order Code", "FG", "CAT", "US", "FS", "Qty",
+        "X3 Date", "GRP_FLG", "Start Date", "Delay", "Stock_Produit"
+    ]
 
     with open(filepath, "w", newline='', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter='\t')
+        import csv
+        writer = csv.writer(f, delimiter="\t")
         writer.writerow(output_header)
 
         processed_of_ids_in_groups = set()
-        
+
         def extract_group_number(group):
             try:
                 return int(group.id.replace("GRP", ""))
-            except:
+            except Exception:
                 return 0
-        
+
+        # -------- GROUPES --------
         for group in sorted(grouped_list_data, key=extract_group_number):
             f.write(f"\n# Group ID: {group.id}\n")
             f.write(f"#   Produit PS Principal: {group.ps_product_id}\n")
-            f.write(f"#   Fenêtre Temporelle: {group.time_window_start.strftime('%Y-%m-%d')} à {group.time_window_end.strftime('%Y-%m-%d')}\n")
-            
-            # Afficher les stocks calculés du groupe
-            if hasattr(group, 'individual_product_stocks') and group.ps_product_id in group.individual_product_stocks:
-                ps_stock = group.individual_product_stocks[group.ps_product_id]
-                f.write(f"#   Stock PS Calculé: {ps_stock:.2f}\n")
-            else:
-                f.write(f"#   Stock PS: Non calculé\n")
-            
-            ofs_in_this_group = [of for of in all_ofs_scheduled if of.assigned_group_id == group.id]
+            f.write(
+                f"#   Fenêtre Temporelle: {group.time_window_start.strftime('%Y-%m-%d')} "
+                f"à {group.time_window_end.strftime('%Y-%m-%d')}\n"
+            )
 
-            for of_obj in sorted(ofs_in_this_group, key=lambda x: (-x.bom_level, x.need_date)):
+            if hasattr(group, "individual_product_stocks") and group.ps_product_id in group.individual_product_stocks:
+                f.write(f"#   Stock PS Calculé: {group.individual_product_stocks[group.ps_product_id]:.2f}\n")
+            else:
+                f.write("#   Stock PS: Non calculé\n")
+
+            ofs_in_group = [of for of in all_ofs_scheduled if of.assigned_group_id == group.id]
+
+            for of_obj in sorted(ofs_in_group, key=lambda x: (-x.bom_level, x.need_date)):
+                # description courte
                 desc_parts = of_obj.designation.split()
-                processed_description = ""
                 if not desc_parts:
                     processed_description = ""
                 elif len(desc_parts) >= 2 and desc_parts[0].upper() == "BATENS":
@@ -939,16 +1047,38 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                 processed_order_code = of_obj.id[:10]
                 grp_flg = of_obj.assigned_group_id.replace("GRP", "") if of_obj.assigned_group_id else ""
                 start_date_str = of_obj.scheduled_start_date.strftime("%Y-%m-%d") if of_obj.scheduled_start_date else ""
-                
+
                 delay_val = ""
                 if of_obj.scheduled_start_date and of_obj.need_date:
                     delay_days = (of_obj.scheduled_start_date - of_obj.need_date).days
                     delay_val = str(max(0, delay_days))
 
-                # CORRECTION : Utiliser le stock INDIVIDUEL de l'OF, pas le stock du groupe
-                individual_stock = of_obj.individual_product_stock  # ← CHANGEMENT ICI
-                
-                row_to_write = [
+                # ⬇️ on prend EXACTEMENT ce que le calcul a mis
+                stock_val = getattr(of_obj, "individual_product_stock", None)
+                if stock_val is None:
+                    stock_val = getattr(of_obj, "remaining_stock", 0.0)
+                if stock_val is None:
+                    stock_val = 0.0
+
+                # on n'arrondit plus
+                if isinstance(stock_val, float):
+                    # tu peux choisir la précision que tu veux, ou juste str()
+                    stock_display = str(stock_val)
+                else:
+                    stock_display = str(stock_val)
+
+
+                print(
+                    f"[WRITE][{group.id}] OF {of_obj.id} ({of_obj.product_id}) "
+                    f"indiv={getattr(of_obj, 'individual_product_stock', None)} "
+                    f"remaining_attr={getattr(of_obj, 'remaining_stock', None)} "
+                    f"-> écrit={stock_display}"
+                )
+
+                qty_display = getattr(of_obj, "source_qty", None)
+                if not qty_display:  # si pas trouvé ou vide
+                    qty_display = int(of_obj.quantity)  # fallback comme avant
+                writer.writerow([
                     of_obj.product_id,
                     processed_description,
                     processed_order_code,
@@ -956,27 +1086,22 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     of_obj.cat,
                     of_obj.us,
                     of_obj.fs,
-                    int(of_obj.quantity),
+                    qty_display,
                     of_obj.need_date.strftime("%Y-%m-%d") if of_obj.need_date else "",
                     grp_flg,
                     start_date_str,
                     delay_val,
-                    individual_stock  # ← Maintenant c'est la production de cet OF spécifique
-                ]
-                writer.writerow(row_to_write)
+                    stock_display
+                ])
+
                 processed_of_ids_in_groups.add(of_obj.id)
-        
-        # ... reste du code inchangé ...
-        
-        # ... [le reste pour les OFs non affectés] ...
 
-        
+        # -------- OF NON AFFECTÉS --------
         f.write("\n# OFs Non Affectés:\n")
-        unassigned_ofs_for_output = [of for of in all_ofs_scheduled if of.id not in processed_of_ids_in_groups]
+        unassigned = [of for of in all_ofs_scheduled if of.id not in processed_of_ids_in_groups]
 
-        for of_obj in sorted(unassigned_ofs_for_output, key=lambda x: x.id):
+        for of_obj in sorted(unassigned, key=lambda x: x.id):
             desc_parts = of_obj.designation.split()
-            processed_description = ""
             if not desc_parts:
                 processed_description = ""
             elif len(desc_parts) >= 2 and desc_parts[0].upper() == "BATENS":
@@ -989,15 +1114,31 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             processed_order_code = of_obj.id[:10]
             grp_flg = of_obj.assigned_group_id.replace("GRP", "") if of_obj.assigned_group_id else ""
             start_date_str = of_obj.scheduled_start_date.strftime("%Y-%m-%d") if of_obj.scheduled_start_date else ""
-            
+
             delay_val = ""
             if of_obj.scheduled_start_date and of_obj.need_date:
                 delay_days = (of_obj.scheduled_start_date - of_obj.need_date).days
                 delay_val = str(max(0, delay_days))
 
-            individual_stock = getattr(of_obj, 'individual_product_stock', 'N/A')
-            
-            row_to_write = [
+            stock_val = getattr(of_obj, "individual_product_stock", None)
+            if stock_val is None:
+                stock_val = getattr(of_obj, "remaining_stock", 0.0)
+            if stock_val is None:
+                stock_val = 0.0
+
+            try:
+                stock_display = f"{float(stock_val):.2f}"
+            except (TypeError, ValueError):
+                stock_display = str(stock_val)
+
+            print(
+                f"[WRITE][UNASSIGNED] OF {of_obj.id} ({of_obj.product_id}) "
+                f"indiv={getattr(of_obj, 'individual_product_stock', None)} "
+                f"remaining_attr={getattr(of_obj, 'remaining_stock', None)} "
+                f"-> écrit={stock_display}"
+            )
+
+            writer.writerow([
                 of_obj.product_id,
                 processed_description,
                 processed_order_code,
@@ -1010,11 +1151,11 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                 grp_flg,
                 start_date_str,
                 delay_val,
-                individual_stock
-            ]
-            writer.writerow(row_to_write)
+                stock_display
+            ])
 
     print(f"Output written to {filepath} with individual product stocks.")
+
 
 def load_compact_input_file(filepath):
     """
