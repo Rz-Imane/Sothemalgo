@@ -526,132 +526,225 @@ def sort_ofs_for_grouping(of_list):
 def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
     group_counter = 1
     groups = []
-    
+    non_groupable_ids = set()
+
+    # --- utils de normalisation ---
+    def norm(x):
+        return ''.join(str(x).split()).upper()
+
+    # 0) set des vrais premix (les feuilles)
+    real_premix_ids = {
+        norm(b.child_product_id)
+        for b in bom_data
+        if int(b.child_bom_level) == 0
+    }
+
+    # 0bis) map inverse : child -> parents (pour remonter SF0122 -> SF0351)
+    child_to_parents = {}
+    for b in bom_data:
+        c = norm(b.child_product_id)
+        p = norm(b.parent_product_id)
+        child_to_parents.setdefault(c, set()).add(p)
+
     while True:
+        # 1) OF client de départ
         unassigned_client_ofs = sorted(
-            [of for of in all_ofs if of.product_type in ["PF", "SF"] and of.assigned_group_id is None],
+            [
+                of for of in all_ofs
+                if of.product_type in ["PF", "SF"]
+                and of.assigned_group_id is None
+                and of.id not in non_groupable_ids
+            ],
             key=lambda of: (-of.bom_level, of.need_date, of.designation)
         )
-
-        if not unassigned_client_ofs: break
+        if not unassigned_client_ofs:
+            break
 
         base_client_of = unassigned_client_ofs[0]
-        
+
+        # 2) calcul besoins descendant
         needed_components = {}
-        family_product_ids = {base_client_of.product_id}
+        family_product_ids = {norm(base_client_of.product_id)}
+
         for bom_entry in bom_data:
-            qty_needed = find_qty_of_component_in_product(base_client_of.product_id, bom_entry.child_product_id, bom_data)
+            qty_needed = find_qty_of_component_in_product(
+                base_client_of.product_id,
+                bom_entry.child_product_id,
+                bom_data
+            )
             if qty_needed > 0:
+                child_norm = norm(bom_entry.child_product_id)
                 total_qty_needed = qty_needed * base_client_of.quantity
-                needed_components[bom_entry.child_product_id] = needed_components.get(bom_entry.child_product_id, 0) + total_qty_needed
-                family_product_ids.add(bom_entry.child_product_id)
-        
+                needed_components[child_norm] = needed_components.get(child_norm, 0.0) + total_qty_needed
+                family_product_ids.add(child_norm)
+
+        # 3) trouver un vrai premix dispo pour ce client
         best_supply_candidate = None
-        best_date_diff = float('inf')
-        for comp_id in needed_components.keys():
+        best_date_diff = float("inf")
+
+        for comp_id_norm in needed_components.keys():
+            if comp_id_norm not in real_premix_ids:
+                continue
             candidate_supply = [
                 of for of in all_ofs
-                if of.product_id == comp_id and of.assigned_group_id is None
+                if of.assigned_group_id is None
+                and norm(of.product_id) == comp_id_norm
             ]
             if candidate_supply:
-                closest_supply = min(candidate_supply, key=lambda x: abs((x.need_date - base_client_of.need_date).days))
+                closest_supply = min(
+                    candidate_supply,
+                    key=lambda x: abs((x.need_date - base_client_of.need_date).days)
+                )
                 date_diff = abs((closest_supply.need_date - base_client_of.need_date).days)
                 if date_diff < best_date_diff:
                     best_date_diff = date_diff
                     best_supply_candidate = closest_supply
-        
-        if best_supply_candidate:
-            main_premix = best_supply_candidate.product_id
-            reference_date = best_supply_candidate.need_date
-        else:
-            main_premix = f"PS_GROUP_{group_counter}"
-            reference_date = base_client_of.need_date
-        
+
+        # pas de premix => pas de groupe
+        if not best_supply_candidate:
+            non_groupable_ids.add(base_client_of.id)
+            base_client_of.status = "UNASSIGNED"
+            print(f"[GROUPING] OF {base_client_of.id} ignoré : aucun vrai premix dispo.")
+            continue
+
+        main_premix = norm(best_supply_candidate.product_id)
+        reference_date = best_supply_candidate.need_date
+
+        # 4) fenêtre
         child_dates = []
-        for comp_id in needed_components.keys():
+        for comp_id_norm in needed_components.keys():
             candidate_children = [
                 of for of in all_ofs
-                if of.product_id == comp_id and of.assigned_group_id is None
+                if of.assigned_group_id is None
+                and norm(of.product_id) == comp_id_norm
             ]
             if candidate_children:
                 earliest_child = min(candidate_children, key=lambda x: x.need_date)
                 child_dates.append(earliest_child.need_date)
-        
+
         if child_dates:
             window_start_date = min(child_dates)
         else:
             window_start_date = reference_date
+
         window_duration_td = timedelta(weeks=horizon_H_weeks_param)
         window_end_date = window_start_date + window_duration_td - timedelta(days=1)
-        
-        current_group = Group(f"GRP{group_counter}", main_premix, base_client_of, window_start_date, window_end_date)
-        
-        for comp_id, qty_needed in needed_components.items():
-            current_group.component_stocks[comp_id] = -qty_needed
 
-        print(f"Created {current_group} with client OF {base_client_of.id}, window start {window_start_date.strftime('%Y-%m-%d')}, horizon {horizon_H_weeks_param}w")
+        # 5) créer le groupe
+        current_group = Group(
+            f"GRP{group_counter}",
+            main_premix,
+            base_client_of,
+            window_start_date,
+            window_end_date
+        )
 
-        available_ps_ofs = [
-            of for of in all_ofs 
-            if of.product_type == "PS" and 
-               of.assigned_group_id is None and
-               window_start_date <= of.need_date <= window_end_date
+        # init des stocks demandés
+        for comp_id_norm, qty_needed in needed_components.items():
+            current_group.component_stocks[comp_id_norm] = -qty_needed
+
+        print(
+            f"Created {current_group} with client OF {base_client_of.id}, "
+            f"window start {window_start_date.strftime('%Y-%m-%d')}, horizon {horizon_H_weeks_param}w"
+        )
+
+        # 6) ajouter les OF de premix dans la fenêtre
+        available_ofs_in_window = [
+            of for of in all_ofs
+            if of.assigned_group_id is None
+            and window_start_date <= of.need_date <= window_end_date
         ]
-        
-        for ps_of in sorted(available_ps_ofs, key=lambda o: o.need_date):
-            if ps_of.product_id in needed_components:
+        for ps_of in sorted(available_ofs_in_window, key=lambda o: o.need_date):
+            prod_norm = norm(ps_of.product_id)
+            if prod_norm in needed_components and prod_norm in real_premix_ids:
                 current_group.add_of(ps_of, ps_quantity_change=ps_of.quantity)
-                current_group.component_stocks[ps_of.product_id] += ps_of.quantity
-                family_product_ids.add(ps_of.product_id)
+                current_group.component_stocks[prod_norm] = current_group.component_stocks.get(prod_norm, 0.0) + ps_of.quantity
+                family_product_ids.add(prod_norm)
                 print(f"  Added Premix OF {ps_of.id} ({ps_of.product_id}) to {current_group.id}")
 
+        # 6bis) 👉 ajouter les PARENTS du premix si on les trouve dans la même fenêtre
+        # ex: premix = SF0122 → parent = SF0351
+        parents_of_main_premix = child_to_parents.get(main_premix, set())
+        for parent_prod in parents_of_main_premix:
+            parent_ofs = [
+                of for of in all_ofs
+                if of.assigned_group_id is None
+                and norm(of.product_id) == parent_prod
+                and window_start_date <= of.need_date <= window_end_date
+            ]
+            for pof in parent_ofs:
+                current_group.add_of(pof, ps_quantity_change=0)
+                family_product_ids.add(parent_prod)
+                print(f"  Added PARENT OF {pof.id} ({pof.product_id}) to {current_group.id} (parent of premix {main_premix})")
+
+        # 7) ajouter autres PF/SF même famille
         other_client_ofs = [
-            of for of in all_ofs 
-            if of.product_type in ["PF", "SF"] and 
-               of.assigned_group_id is None and
-               of.id != base_client_of.id and
-               window_start_date <= of.need_date <= window_end_date
+            of for of in all_ofs
+            if of.product_type in ["PF", "SF"]
+            and of.assigned_group_id is None
+            and of.id != base_client_of.id
+            and window_start_date <= of.need_date <= window_end_date
         ]
-        
+
         for client_of in sorted(other_client_ofs, key=lambda o: o.need_date):
             client_needed_components = {}
             for bom_entry in bom_data:
-                qty_needed = find_qty_of_component_in_product(client_of.product_id, bom_entry.child_product_id, bom_data)
+                qty_needed = find_qty_of_component_in_product(
+                    client_of.product_id,
+                    bom_entry.child_product_id,
+                    bom_data
+                )
                 if qty_needed > 0:
-                    total_needed = qty_needed * client_of.quantity
-                    client_needed_components[bom_entry.child_product_id] = client_needed_components.get(bom_entry.child_product_id, 0) + total_needed
-            
-            is_direct_component = client_of.product_id in family_product_ids
-            shared_components = any(comp_id in family_product_ids for comp_id in client_needed_components.keys())
+                    child_norm = norm(bom_entry.child_product_id)
+                    client_needed_components[child_norm] = client_needed_components.get(child_norm, 0.0) + qty_needed * client_of.quantity
+
+            is_direct_component = norm(client_of.product_id) in family_product_ids
+            shared_components = any(cid in family_product_ids for cid in client_needed_components.keys())
             same_family = is_direct_component or shared_components
-            
+
             if same_family:
                 current_group.add_of(client_of, ps_quantity_change=0)
-                
-                if client_of.product_type == "SF":
-                    current_group.component_stocks[client_of.product_id] = current_group.component_stocks.get(client_of.product_id, 0) + client_of.quantity
-                
-                for comp_id, qty_needed in client_needed_components.items():
-                    current_group.component_stocks[comp_id] = current_group.component_stocks.get(comp_id, 0) - qty_needed
-                    needed_components[comp_id] = needed_components.get(comp_id, 0) + qty_needed
-                
-                family_product_ids.add(client_of.product_id)
-                family_product_ids.update(client_needed_components.keys())
-                    
-                print(f"  Added family OF {client_of.id} ({client_of.product_type}) to {current_group.id}")
-        
-        # Calculate consumption and update individual stocks
-        current_group.calculate_consumption(bom_data)
-        
-        groups.append(current_group)
-        group_counter += 1
 
+                if client_of.product_type == "SF":
+                    current_group.component_stocks[norm(client_of.product_id)] = (
+                        current_group.component_stocks.get(norm(client_of.product_id), 0.0) + client_of.quantity
+                    )
+
+                for cid, qn in client_needed_components.items():
+                    current_group.component_stocks[cid] = current_group.component_stocks.get(cid, 0.0) - qn
+                    needed_components[cid] = needed_components.get(cid, 0.0) + qn
+
+                family_product_ids.add(norm(client_of.product_id))
+                family_product_ids.update(client_needed_components.keys())
+                print(f"  Added family OF {client_of.id} ({client_of.product_type}) to {current_group.id}")
+
+        # 8) calcul conso
+        current_group.calculate_consumption(bom_data)
+
+        # 9) contrôle final
+        ofs_in_that_group = [of for of in all_ofs if of.assigned_group_id == current_group.id]
+        has_real_premix = any(norm(of.product_id) in real_premix_ids for of in ofs_in_that_group)
+
+        if (len(ofs_in_that_group) <= 1) or (not has_real_premix):
+            for of in ofs_in_that_group:
+                of.assigned_group_id = None
+                of.status = "UNASSIGNED"
+                of.individual_product_stock = 0
+                non_groupable_ids.add(of.id)
+            print(f"[GROUPING] {current_group.id} discarded (no real premix or single OF).")
+        else:
+            groups.append(current_group)
+            group_counter += 1
+
+    # rapport final
     unassigned_ofs_final = [of for of in all_ofs if of.assigned_group_id is None]
     if unassigned_ofs_final:
         print("\nWarning: Some OFs remain unassigned after grouping:")
-        for of in unassigned_ofs_final: print(f"  - {of}")
-            
+        for of in unassigned_ofs_final:
+            print(f"  - {of}")
+
     return groups, all_ofs
+
 
 def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map, operations_map, params):
     print("\n--- Starting Detailed Smoothing and Scheduling ---")
@@ -1003,6 +1096,19 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
         "X3 Date", "GRP_FLG", "Start Date", "Delay", "Stock_Produit"
     ]
 
+    def is_premix(of_obj):
+        name = (of_obj.designation or "").strip().upper()
+        return name.startswith("PREMIX")
+
+    def display_class(of_obj):
+        # 0 = PF, 1 = SF non premix, 2 = premix
+        if is_premix(of_obj):
+            return 2
+        if of_obj.product_type == "PF":
+            return 0
+        # le reste (SF non premix)
+        return 1
+
     with open(filepath, "w", newline='', encoding='utf-8') as f:
         import csv
         writer = csv.writer(f, delimiter="\t")
@@ -1016,7 +1122,7 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             except Exception:
                 return 0
 
-        # -------- GROUPES --------
+        # =============== GROUPES ===============
         for group in sorted(grouped_list_data, key=extract_group_number):
             f.write(f"\n# Group ID: {group.id}\n")
             f.write(f"#   Produit PS Principal: {group.ps_product_id}\n")
@@ -1026,13 +1132,24 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             )
 
             if hasattr(group, "individual_product_stocks") and group.ps_product_id in group.individual_product_stocks:
-                f.write(f"#   Stock PS Calculé: {group.individual_product_stocks[group.ps_product_id]:.2f}\n")
+                f.write(f"#   Stock PS Calculé: {group.individual_product_stocks[group.ps_product_id]}\n")
             else:
                 f.write("#   Stock PS: Non calculé\n")
 
+            # OF du groupe
             ofs_in_group = [of for of in all_ofs_scheduled if of.assigned_group_id == group.id]
 
-            for of_obj in sorted(ofs_in_group, key=lambda x: (-x.bom_level, x.need_date)):
+            # >>> TRI demandé : PF -> SF -> PREMIX
+            ofs_in_group_sorted = sorted(
+                ofs_in_group,
+                key=lambda x: (
+                    display_class(x),      # 0 PF, 1 SF, 2 PREMIX
+                    -x.bom_level,
+                    x.need_date
+                )
+            )
+
+            for of_obj in ofs_in_group_sorted:
                 # description courte
                 desc_parts = of_obj.designation.split()
                 if not desc_parts:
@@ -1053,31 +1170,12 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     delay_days = (of_obj.scheduled_start_date - of_obj.need_date).days
                     delay_val = str(max(0, delay_days))
 
-                # ⬇️ on prend EXACTEMENT ce que le calcul a mis
                 stock_val = getattr(of_obj, "individual_product_stock", None)
                 if stock_val is None:
                     stock_val = getattr(of_obj, "remaining_stock", 0.0)
                 if stock_val is None:
                     stock_val = 0.0
 
-                # on n'arrondit plus
-                if isinstance(stock_val, float):
-                    # tu peux choisir la précision que tu veux, ou juste str()
-                    stock_display = str(stock_val)
-                else:
-                    stock_display = str(stock_val)
-
-
-                print(
-                    f"[WRITE][{group.id}] OF {of_obj.id} ({of_obj.product_id}) "
-                    f"indiv={getattr(of_obj, 'individual_product_stock', None)} "
-                    f"remaining_attr={getattr(of_obj, 'remaining_stock', None)} "
-                    f"-> écrit={stock_display}"
-                )
-
-                qty_display = getattr(of_obj, "source_qty", None)
-                if not qty_display:  # si pas trouvé ou vide
-                    qty_display = int(of_obj.quantity)  # fallback comme avant
                 writer.writerow([
                     of_obj.product_id,
                     processed_description,
@@ -1086,21 +1184,29 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     of_obj.cat,
                     of_obj.us,
                     of_obj.fs,
-                    qty_display,
+                    int(of_obj.quantity),
                     of_obj.need_date.strftime("%Y-%m-%d") if of_obj.need_date else "",
                     grp_flg,
                     start_date_str,
                     delay_val,
-                    stock_display
+                    stock_val,
                 ])
 
                 processed_of_ids_in_groups.add(of_obj.id)
 
-        # -------- OF NON AFFECTÉS --------
+        # =============== NON AFFECTÉS ===============
         f.write("\n# OFs Non Affectés:\n")
         unassigned = [of for of in all_ofs_scheduled if of.id not in processed_of_ids_in_groups]
 
-        for of_obj in sorted(unassigned, key=lambda x: x.id):
+        unassigned_sorted = sorted(
+            unassigned,
+            key=lambda x: (
+                display_class(x),   # même logique PF -> SF -> PREMIX
+                x.id
+            )
+        )
+
+        for of_obj in unassigned_sorted:
             desc_parts = of_obj.designation.split()
             if not desc_parts:
                 processed_description = ""
@@ -1126,18 +1232,6 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             if stock_val is None:
                 stock_val = 0.0
 
-            try:
-                stock_display = f"{float(stock_val):.2f}"
-            except (TypeError, ValueError):
-                stock_display = str(stock_val)
-
-            print(
-                f"[WRITE][UNASSIGNED] OF {of_obj.id} ({of_obj.product_id}) "
-                f"indiv={getattr(of_obj, 'individual_product_stock', None)} "
-                f"remaining_attr={getattr(of_obj, 'remaining_stock', None)} "
-                f"-> écrit={stock_display}"
-            )
-
             writer.writerow([
                 of_obj.product_id,
                 processed_description,
@@ -1151,11 +1245,10 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                 grp_flg,
                 start_date_str,
                 delay_val,
-                stock_display
+                stock_val
             ])
 
-    print(f"Output written to {filepath} with individual product stocks.")
-
+    print(f"Output written to {filepath} with PF on top, premix at bottom.")
 
 def load_compact_input_file(filepath):
     """
