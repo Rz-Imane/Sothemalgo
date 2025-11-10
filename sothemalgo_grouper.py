@@ -539,7 +539,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
         if int(b.child_bom_level) == 0
     }
 
-    # 0bis) map inverse : child -> parents (pour remonter SF0122 -> SF0351)
+    # 0bis) map inverse : child -> parents 
     child_to_parents = {}
     for b in bom_data:
         c = norm(b.child_product_id)
@@ -630,6 +630,15 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
         window_duration_td = timedelta(weeks=horizon_H_weeks_param)
         window_end_date = window_start_date + window_duration_td - timedelta(days=1)
 
+        
+        if not (window_start_date <= base_client_of.need_date <= window_end_date):
+            # on marque cet OF comme non groupable dans ce run
+            base_client_of.status = "UNASSIGNED"
+            non_groupable_ids.add(base_client_of.id)
+            print(f"[GROUPING] OF {base_client_of.id} ignoré : date client {base_client_of.need_date:%Y-%m-%d} hors fenêtre {window_start_date:%Y-%m-%d} - {window_end_date:%Y-%m-%d}.")
+            continue
+        
+
         # 5) créer le groupe
         current_group = Group(
             f"GRP{group_counter}",
@@ -663,7 +672,6 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
                 print(f"  Added Premix OF {ps_of.id} ({ps_of.product_id}) to {current_group.id}")
 
         # 6bis) 👉 ajouter les PARENTS du premix si on les trouve dans la même fenêtre
-        # ex: premix = SF0122 → parent = SF0351
         parents_of_main_premix = child_to_parents.get(main_premix, set())
         for parent_prod in parents_of_main_premix:
             parent_ofs = [
@@ -1175,7 +1183,7 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     stock_val = getattr(of_obj, "remaining_stock", 0.0)
                 if stock_val is None:
                     stock_val = 0.0
-
+                
                 writer.writerow([
                     of_obj.product_id,
                     processed_description,
@@ -1184,7 +1192,7 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     of_obj.cat,
                     of_obj.us,
                     of_obj.fs,
-                    int(of_obj.quantity),
+                    of_obj.source_qty,
                     of_obj.need_date.strftime("%Y-%m-%d") if of_obj.need_date else "",
                     grp_flg,
                     start_date_str,
