@@ -1,0 +1,1671 @@
+{
+  "generated_at": "2025-11-16T00:02:14",
+  "items": [
+    {
+      "of_id": "BSK2510OF9253",
+      "product_id": "SF0006",
+      "designation": "SF BATENS 10MG CP SF BATENS 10MG CP  ",
+      "group_id": "GRP1",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 08:00",
+      "scheduled_end": "2025-10-17 09:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP03",
+          "start": "2025-10-17 08:00",
+          "end": "2025-10-17 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9254",
+      "product_id": "SF0006",
+      "designation": "SF BATENS 10MG CP SF BATENS 10MG CP  ",
+      "group_id": "GRP1",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 09:00",
+      "scheduled_end": "2025-10-17 10:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP03",
+          "start": "2025-10-17 09:00",
+          "end": "2025-10-17 10:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9255",
+      "product_id": "SF0006",
+      "designation": "SF BATENS 10MG CP SF BATENS 10MG CP  ",
+      "group_id": "GRP1",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 10:00",
+      "scheduled_end": "2025-10-17 11:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP03",
+          "start": "2025-10-17 10:00",
+          "end": "2025-10-17 11:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9256",
+      "product_id": "SF0006",
+      "designation": "SF BATENS 10MG CP SF BATENS 10MG CP  ",
+      "group_id": "GRP1",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 11:00",
+      "scheduled_end": "2025-10-17 12:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP03",
+          "start": "2025-10-17 11:00",
+          "end": "2025-10-17 12:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029862358",
+      "product_id": "SF0154",
+      "designation": "PREMIX BATENS PREMIX BATENS  ",
+      "group_id": "GRP1",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 08:00",
+      "scheduled_end": "2025-10-17 10:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP01",
+          "start": "2025-10-17 08:00",
+          "end": "2025-10-17 10:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029862359",
+      "product_id": "SF0154",
+      "designation": "PREMIX BATENS PREMIX BATENS  ",
+      "group_id": "GRP1",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 10:00",
+      "scheduled_end": "2025-10-17 12:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP01",
+          "start": "2025-10-17 10:00",
+          "end": "2025-10-17 12:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029862360",
+      "product_id": "SF0154",
+      "designation": "PREMIX BATENS PREMIX BATENS  ",
+      "group_id": "GRP1",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 13:00",
+      "scheduled_end": "2025-10-17 15:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP01",
+          "start": "2025-10-17 13:00",
+          "end": "2025-10-17 15:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9093",
+      "product_id": "PF4472",
+      "designation": "BATENS 10MG 10CPS ECH BATENS 10MG 10CPS ECH  ",
+      "group_id": "GRP1",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 08:00",
+      "scheduled_end": "2025-10-22 08:42",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-22 08:00",
+          "end": "2025-10-22 08:42"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9094",
+      "product_id": "PF4472",
+      "designation": "BATENS 10MG 10CPS ECH BATENS 10MG 10CPS ECH  ",
+      "group_id": "GRP1",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 08:42",
+      "scheduled_end": "2025-10-22 09:24",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-22 08:42",
+          "end": "2025-10-22 09:24"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9270",
+      "product_id": "SF0023",
+      "designation": "SF EVITOP 60MG CP SF EVITOP 60MG CP  ",
+      "group_id": "GRP2",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 08:00",
+      "scheduled_end": "2025-10-17 09:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP02",
+          "start": "2025-10-17 08:00",
+          "end": "2025-10-17 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029862443",
+      "product_id": "SF0157",
+      "designation": "PREMIX EVITOP ",
+      "group_id": "GRP2",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL16"
+    },
+    {
+      "of_id": "BSK2510OF9006",
+      "product_id": "PF4218",
+      "designation": "EVITOP 60MG 3CPS E/A EXP EVITOP 30MG 3CPS E/A EXP EVITOP",
+      "group_id": "GRP2",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 08:00",
+      "scheduled_end": "2025-10-22 09:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-22 08:00",
+          "end": "2025-10-22 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9296",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 08:00",
+      "scheduled_end": "2025-10-17 09:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 08:00",
+          "end": "2025-10-17 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9297",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 09:00",
+      "scheduled_end": "2025-10-17 10:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 09:00",
+          "end": "2025-10-17 10:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9298",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 10:00",
+      "scheduled_end": "2025-10-17 11:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 10:00",
+          "end": "2025-10-17 11:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9299",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 11:00",
+      "scheduled_end": "2025-10-17 12:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 11:00",
+          "end": "2025-10-17 12:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9300",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 13:00",
+      "scheduled_end": "2025-10-17 14:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 13:00",
+          "end": "2025-10-17 14:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029862485",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862486",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862487",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862488",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862489",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862490",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862491",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862492",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862493",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "SUGBSK000029862494",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "BSK2511OF6065",
+      "product_id": "SF0158",
+      "designation": "PREMIX ICTAVES PREMIX ICTAVES  ",
+      "group_id": "GRP3",
+      "need_date": "2025-11-06",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL02"
+    },
+    {
+      "of_id": "BSK2511OF5571",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-11-07",
+      "scheduled_start": "2025-10-17 14:00",
+      "scheduled_end": "2025-10-17 15:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 14:00",
+          "end": "2025-10-17 15:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2511OF5572",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-11-07",
+      "scheduled_start": "2025-10-17 15:00",
+      "scheduled_end": "2025-10-17 16:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 15:00",
+          "end": "2025-10-17 16:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2511OF5573",
+      "product_id": "SF0036",
+      "designation": "SF ICTAVES 5MG CP SF ICTAVES 5MG CP  ",
+      "group_id": "GRP3",
+      "need_date": "2025-11-07",
+      "scheduled_start": "2025-10-17 16:00",
+      "scheduled_end": "2025-10-17 17:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-17 16:00",
+          "end": "2025-10-17 17:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9301",
+      "product_id": "SF0037",
+      "designation": "SF INOPRIL 4MG CP SF INOPRIL 4MG CP  ",
+      "group_id": "GRP4",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL05"
+    },
+    {
+      "of_id": "BSK2510OF9302",
+      "product_id": "SF0037",
+      "designation": "SF INOPRIL 4MG CP SF INOPRIL 4MG CP  ",
+      "group_id": "GRP4",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL05"
+    },
+    {
+      "of_id": "SUGBSK000029862889",
+      "product_id": "SF0159",
+      "designation": "PREMIX INOPRIL PREMIX INOPRIL  ",
+      "group_id": "GRP4",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL06"
+    },
+    {
+      "of_id": "SUGBSK000029862890",
+      "product_id": "SF0159",
+      "designation": "PREMIX INOPRIL PREMIX INOPRIL  ",
+      "group_id": "GRP4",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL06"
+    },
+    {
+      "of_id": "SUGBSK000029862891",
+      "product_id": "SF0159",
+      "designation": "PREMIX INOPRIL PREMIX INOPRIL  ",
+      "group_id": "GRP4",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL06"
+    },
+    {
+      "of_id": "SUGBSK000029860221",
+      "product_id": "SF0381",
+      "designation": "SF MOVART 5/160MG CP SF MOVART 5/160MG CP  ",
+      "group_id": "GRP5",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL10"
+    },
+    {
+      "of_id": "SUGBSK000029864068",
+      "product_id": "SF0390",
+      "designation": "PREMIX MOVART 5/160-10/320MG PREMIX MOVART 5/160-10/320MG  ",
+      "group_id": "GRP5",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL12"
+    },
+    {
+      "of_id": "BSK2510OF9023",
+      "product_id": "PF4289",
+      "designation": "MOVART 5/160MG 28CPS MOVART 5/160MG 28CPS MOVART",
+      "group_id": "GRP5",
+      "need_date": "2025-10-30",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL07"
+    },
+    {
+      "of_id": "SUGBSK000029860058",
+      "product_id": "SF0380",
+      "designation": "SF MOVART 10/160MG CP SF MOVART 5/80MG CP  ",
+      "group_id": "GRP6",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL09"
+    },
+    {
+      "of_id": "SUGBSK000029860059",
+      "product_id": "SF0380",
+      "designation": "SF MOVART 10/160MG CP SF MOVART 5/80MG CP  ",
+      "group_id": "GRP6",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL09"
+    },
+    {
+      "of_id": "SUGBSK000029860060",
+      "product_id": "SF0380",
+      "designation": "SF MOVART 10/160MG CP SF MOVART 5/80MG CP  ",
+      "group_id": "GRP6",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL09"
+    },
+    {
+      "of_id": "SUGBSK000029864026",
+      "product_id": "SF0389",
+      "designation": "PREMIX MOVART 5/80-10/160MG PREMIX MOVART 5/80-10/160MG  ",
+      "group_id": "GRP6",
+      "need_date": "2025-10-17",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL11"
+    },
+    {
+      "of_id": "BSK2510OF9148",
+      "product_id": "PF4690",
+      "designation": "MOVART 10/160MG 28CPS ECH MOVART 10/160MG 28CPS ECH MOVART",
+      "group_id": "GRP6",
+      "need_date": "2025-10-30",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL08"
+    },
+    {
+      "of_id": "BSK2510OF9149",
+      "product_id": "PF4690",
+      "designation": "MOVART 10/160MG 28CPS ECH MOVART 10/160MG 28CPS ECH MOVART",
+      "group_id": "GRP6",
+      "need_date": "2025-10-30",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL08"
+    },
+    {
+      "of_id": "BSK2510OF0178",
+      "product_id": "SF0350",
+      "designation": "SF RASTINE 10MG CP SF RASTINE 10MG CP  ",
+      "group_id": "GRP7",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 08:00",
+      "scheduled_end": "2025-10-20 09:00",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-20 08:00",
+          "end": "2025-10-20 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF0179",
+      "product_id": "SF0350",
+      "designation": "SF RASTINE 10MG CP SF RASTINE 10MG CP  ",
+      "group_id": "GRP7",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 09:00",
+      "scheduled_end": "2025-10-20 10:00",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-20 09:00",
+          "end": "2025-10-20 10:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF0180",
+      "product_id": "SF0350",
+      "designation": "SF RASTINE 10MG CP SF RASTINE 10MG CP  ",
+      "group_id": "GRP7",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 10:00",
+      "scheduled_end": "2025-10-20 11:00",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-20 10:00",
+          "end": "2025-10-20 11:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029862329",
+      "product_id": "SF0128",
+      "designation": "PREMIX RASTINE 5/10MG PREMIX RASTINE 5/10MG  ",
+      "group_id": "GRP7",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 08:00",
+      "scheduled_end": "2025-10-17 08:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 08:00",
+          "end": "2025-10-17 08:30"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9015",
+      "product_id": "PF4269",
+      "designation": "RASTINE 10MG 30CPS RASTINE 10MG 30CPS  ",
+      "group_id": "GRP7",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 09:24",
+      "scheduled_end": "2025-10-22 09:54",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-22 09:24",
+          "end": "2025-10-22 09:54"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9016",
+      "product_id": "PF4269",
+      "designation": "RASTINE 10MG 30CPS RASTINE 10MG 30CPS  ",
+      "group_id": "GRP7",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 09:54",
+      "scheduled_end": "2025-10-22 10:24",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-22 09:54",
+          "end": "2025-10-22 10:24"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9020",
+      "product_id": "PF4272",
+      "designation": "RASTINE 10MG 30CPS ECH RASTINE 10MG 30CPS ECH  ",
+      "group_id": "GRP7",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 08:00",
+      "scheduled_end": "2025-10-22 09:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP01",
+          "start": "2025-10-22 08:00",
+          "end": "2025-10-22 09:30"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9021",
+      "product_id": "PF4272",
+      "designation": "RASTINE 10MG 30CPS ECH RASTINE 10MG 30CPS ECH  ",
+      "group_id": "GRP7",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 09:30",
+      "scheduled_end": "2025-10-22 11:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP01",
+          "start": "2025-10-22 09:30",
+          "end": "2025-10-22 11:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF0247",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 08:30",
+      "scheduled_end": "2025-10-17 09:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 08:30",
+          "end": "2025-10-17 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029859013",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 09:00",
+      "scheduled_end": "2025-10-17 09:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 09:00",
+          "end": "2025-10-17 09:30"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029859014",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 09:30",
+      "scheduled_end": "2025-10-17 10:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 09:30",
+          "end": "2025-10-17 10:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029859015",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 10:00",
+      "scheduled_end": "2025-10-17 10:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 10:00",
+          "end": "2025-10-17 10:30"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029859016",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 10:30",
+      "scheduled_end": "2025-10-17 11:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 10:30",
+          "end": "2025-10-17 11:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029859017",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 11:00",
+      "scheduled_end": "2025-10-17 11:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 11:00",
+          "end": "2025-10-17 11:30"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863773",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 08:00",
+      "scheduled_end": "2025-10-17 11:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-17 08:00",
+          "end": "2025-10-17 11:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863774",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 11:00",
+      "scheduled_end": "2025-10-17 15:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-17 11:00",
+          "end": "2025-10-17 15:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863775",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 15:00",
+      "scheduled_end": "2025-10-20 09:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-17 15:00",
+          "end": "2025-10-20 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863776",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 09:00",
+      "scheduled_end": "2025-10-20 12:00",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-20 09:00",
+          "end": "2025-10-20 12:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863777",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 13:00",
+      "scheduled_end": "2025-10-20 16:00",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-20 13:00",
+          "end": "2025-10-20 16:00"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863778",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP8",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 16:00",
+      "scheduled_end": "2025-10-21 10:00",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-20 16:00",
+          "end": "2025-10-21 10:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9143",
+      "product_id": "PF4535",
+      "designation": "VALTERIO 20MG 14CPS ECH VALTERIO 20MG 14CPS ECH VALTERIO",
+      "group_id": "GRP8",
+      "need_date": "2025-10-30",
+      "scheduled_start": "2025-10-17 15:00",
+      "scheduled_end": "2025-10-17 16:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP01",
+          "start": "2025-10-17 15:00",
+          "end": "2025-10-17 16:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9144",
+      "product_id": "PF4535",
+      "designation": "VALTERIO 20MG 14CPS ECH VALTERIO 20MG 14CPS ECH VALTERIO",
+      "group_id": "GRP8",
+      "need_date": "2025-10-30",
+      "scheduled_start": "2025-10-17 16:00",
+      "scheduled_end": "2025-10-17 17:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP01",
+          "start": "2025-10-17 16:00",
+          "end": "2025-10-17 17:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2511OF6034",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-11-07",
+      "scheduled_start": "2025-10-17 11:30",
+      "scheduled_end": "2025-10-17 12:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 11:30",
+          "end": "2025-10-17 12:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2511OF6035",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP8",
+      "need_date": "2025-11-07",
+      "scheduled_start": "2025-10-17 13:00",
+      "scheduled_end": "2025-10-17 13:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 13:00",
+          "end": "2025-10-17 13:30"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2511OF6071",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP8",
+      "need_date": "2025-11-07",
+      "scheduled_start": "2025-10-21 10:00",
+      "scheduled_end": "2025-10-21 14:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-21 10:00",
+          "end": "2025-10-21 14:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9139",
+      "product_id": "PF4530",
+      "designation": "VALTERIO 20MG 14CPS VALTERIO 20MG 14CPS VALTERIO",
+      "group_id": "GRP8",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 08:00",
+      "scheduled_end": "2025-10-22 10:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-10-22 08:00",
+          "end": "2025-10-22 10:30"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9140",
+      "product_id": "PF4531",
+      "designation": "VALTERIO 20MG 56CPS VALTERIO 20MG 56CPS VALTERIO",
+      "group_id": "GRP8",
+      "need_date": "2025-11-12",
+      "scheduled_start": "2025-10-22 08:00",
+      "scheduled_end": "2025-10-22 09:48",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PREP03",
+          "start": "2025-10-22 08:00",
+          "end": "2025-10-22 09:48"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2510OF9376",
+      "product_id": "SF0066",
+      "designation": "SF ZENETIA 50MG CP SF ZENETIA 50MG CP  ",
+      "group_id": "GRP9",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-17 13:30",
+      "scheduled_end": "2025-10-17 14:06",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 13:30",
+          "end": "2025-10-17 14:06"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863543",
+      "product_id": "SF0335",
+      "designation": "PREMIX ZENETIA 50/100MG PREMIX ZENETIA 50/100MG  ",
+      "group_id": "GRP9",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 11:00",
+      "scheduled_end": "2025-10-20 13:12",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-20 11:00",
+          "end": "2025-10-20 13:12"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863544",
+      "product_id": "SF0335",
+      "designation": "PREMIX ZENETIA 50/100MG PREMIX ZENETIA 50/100MG  ",
+      "group_id": "GRP9",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 13:12",
+      "scheduled_end": "2025-10-20 14:24",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-20 13:12",
+          "end": "2025-10-20 14:24"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863545",
+      "product_id": "SF0335",
+      "designation": "PREMIX ZENETIA 50/100MG PREMIX ZENETIA 50/100MG  ",
+      "group_id": "GRP9",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 14:24",
+      "scheduled_end": "2025-10-20 15:36",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-20 14:24",
+          "end": "2025-10-20 15:36"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029863546",
+      "product_id": "SF0335",
+      "designation": "PREMIX ZENETIA 50/100MG PREMIX ZENETIA 50/100MG  ",
+      "group_id": "GRP9",
+      "need_date": "2025-10-17",
+      "scheduled_start": "2025-10-20 15:36",
+      "scheduled_end": "2025-10-20 16:48",
+      "status": "NON",
+      "retard_jours": 3,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-10-20 15:36",
+          "end": "2025-10-20 16:48"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2511OF5588",
+      "product_id": "SF0066",
+      "designation": "SF ZENETIA 50MG CP SF ZENETIA 50MG CP  ",
+      "group_id": "GRP9",
+      "need_date": "2025-11-07",
+      "scheduled_start": "2025-10-17 14:06",
+      "scheduled_end": "2025-10-17 14:42",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-10-17 14:06",
+          "end": "2025-10-17 14:42"
+        }
+      ]
+    },
+    {
+      "of_id": "SUGBSK000029862431",
+      "product_id": "SF0155",
+      "designation": "PREMIX COERIL PREMIX COERIL  ",
+      "group_id": "GRP10",
+      "need_date": "2025-10-29",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL14"
+    },
+    {
+      "of_id": "BSK2510OF9262",
+      "product_id": "SF0155",
+      "designation": "SF COERIL 4MG CP SF COERIL 4MG CP  ",
+      "group_id": "GRP10",
+      "need_date": "2025-10-30",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL14"
+    },
+    {
+      "of_id": "BSK2510OF9263",
+      "product_id": "SF0016",
+      "designation": "SF COERIL 8MG CP SF COERIL 8MG CP  ",
+      "group_id": "GRP10",
+      "need_date": "2025-10-30",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL15"
+    },
+    {
+      "of_id": "BSK2511OF6062",
+      "product_id": "SF0122",
+      "designation": "PREMIX COXILAR PREMIX COXILAR  ",
+      "group_id": "GRP11",
+      "need_date": "2025-11-06",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL27"
+    },
+    {
+      "of_id": "BSK2511OF6063",
+      "product_id": "SF0122",
+      "designation": "PREMIX COXILAR PREMIX COXILAR  ",
+      "group_id": "GRP11",
+      "need_date": "2025-11-06",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL27"
+    },
+    {
+      "of_id": "BSK2511OF6064",
+      "product_id": "SF0122",
+      "designation": "PREMIX COXILAR PREMIX COXILAR  ",
+      "group_id": "GRP11",
+      "need_date": "2025-11-06",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL27"
+    },
+    {
+      "of_id": "BSK2511OF5994",
+      "product_id": "SF0351",
+      "designation": "SF COXILAR 60MG CP SF COXILAR 60MG CP  ",
+      "group_id": "GRP11",
+      "need_date": "2025-11-07",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL24"
+    },
+    {
+      "of_id": "BSK2511OF5995",
+      "product_id": "SF0352",
+      "designation": "SF COXILAR 90MG CP SF COXILAR 90MG CP  ",
+      "group_id": "GRP11",
+      "need_date": "2025-11-07",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL25"
+    },
+    {
+      "of_id": "BSK2511OF5996",
+      "product_id": "SF0353",
+      "designation": "SF COXILAR 120MG CP SF COXILAR 120MG CP  ",
+      "group_id": "GRP11",
+      "need_date": "2025-11-07",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL26"
+    },
+    {
+      "of_id": "BSK2511OF6043",
+      "product_id": "SF0377",
+      "designation": "SF GLIPLI 50MG CP SF GLIPLI 50MG CP  ",
+      "group_id": "GRP12",
+      "need_date": "2025-11-20",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL30"
+    },
+    {
+      "of_id": "BSK2511OF6044",
+      "product_id": "SF0377",
+      "designation": "SF GLIPLI 50MG CP SF GLIPLI 50MG CP  ",
+      "group_id": "GRP12",
+      "need_date": "2025-11-20",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL30"
+    },
+    {
+      "of_id": "BSK2511OF6045",
+      "product_id": "SF0377",
+      "designation": "SF GLIPLI 50MG CP SF GLIPLI 50MG CP  ",
+      "group_id": "GRP12",
+      "need_date": "2025-11-20",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL30"
+    },
+    {
+      "of_id": "BSK2511OF6072",
+      "product_id": "SF0388",
+      "designation": "PREMIX GLIPLI 50/100MG PREMIX GLIPLI 50/100MG  ",
+      "group_id": "GRP12",
+      "need_date": "2025-11-20",
+      "scheduled_start": null,
+      "scheduled_end": null,
+      "status": "ÉCHOUÉ",
+      "retard_jours": 0,
+      "operations": [],
+      "debug": "Post introuvable: CTRL31"
+    },
+    {
+      "of_id": "BSK2512OF4320",
+      "product_id": "SF0335",
+      "designation": "PREMIX ZENETIA 50/100MG PREMIX ZENETIA 50/100MG  ",
+      "group_id": "GRP13",
+      "need_date": "2025-12-08",
+      "scheduled_start": "2025-12-08 08:00",
+      "scheduled_end": "2025-12-08 09:12",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-12-08 08:00",
+          "end": "2025-12-08 09:12"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF4321",
+      "product_id": "SF0335",
+      "designation": "PREMIX ZENETIA 50/100MG PREMIX ZENETIA 50/100MG  ",
+      "group_id": "GRP13",
+      "need_date": "2025-12-08",
+      "scheduled_start": "2025-12-08 09:12",
+      "scheduled_end": "2025-12-08 10:24",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-12-08 09:12",
+          "end": "2025-12-08 10:24"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF4322",
+      "product_id": "SF0335",
+      "designation": "PREMIX ZENETIA 50/100MG PREMIX ZENETIA 50/100MG  ",
+      "group_id": "GRP13",
+      "need_date": "2025-12-08",
+      "scheduled_start": "2025-12-08 10:24",
+      "scheduled_end": "2025-12-08 11:36",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "CTRL01",
+          "start": "2025-12-08 10:24",
+          "end": "2025-12-08 11:36"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF3938",
+      "product_id": "SF0066",
+      "designation": "SF ZENETIA 50MG CP SF ZENETIA 50MG CP  ",
+      "group_id": "GRP13",
+      "need_date": "2025-12-09",
+      "scheduled_start": "2025-12-08 08:00",
+      "scheduled_end": "2025-12-08 08:36",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-12-08 08:00",
+          "end": "2025-12-08 08:36"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF3939",
+      "product_id": "SF0066",
+      "designation": "SF ZENETIA 50MG CP SF ZENETIA 50MG CP  ",
+      "group_id": "GRP13",
+      "need_date": "2025-12-09",
+      "scheduled_start": "2025-12-08 08:36",
+      "scheduled_end": "2025-12-08 09:12",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-12-08 08:36",
+          "end": "2025-12-08 09:12"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF4277",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP14",
+      "need_date": "2025-12-09",
+      "scheduled_start": "2025-12-09 08:00",
+      "scheduled_end": "2025-12-09 08:30",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-12-09 08:00",
+          "end": "2025-12-09 08:30"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF4278",
+      "product_id": "SF0374",
+      "designation": "SF VALTERIO 20MG CP SF VALTERIO 20MG CP  ",
+      "group_id": "GRP14",
+      "need_date": "2025-12-09",
+      "scheduled_start": "2025-12-09 08:30",
+      "scheduled_end": "2025-12-09 09:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "PACK01",
+          "start": "2025-12-09 08:30",
+          "end": "2025-12-09 09:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF4323",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP14",
+      "need_date": "2025-12-09",
+      "scheduled_start": "2025-12-09 08:00",
+      "scheduled_end": "2025-12-09 11:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-12-09 08:00",
+          "end": "2025-12-09 11:00"
+        }
+      ]
+    },
+    {
+      "of_id": "BSK2512OF4324",
+      "product_id": "SF0375",
+      "designation": "PREMIX VALTERIO 10/15/20MG PREMIX VALTERIO 10/15/20MG  ",
+      "group_id": "GRP14",
+      "need_date": "2025-12-09",
+      "scheduled_start": "2025-12-09 11:00",
+      "scheduled_end": "2025-12-09 15:00",
+      "status": "OUI",
+      "retard_jours": 0,
+      "operations": [
+        {
+          "operation": "MEL_COMP",
+          "post_id": "ASSY02",
+          "start": "2025-12-09 11:00",
+          "end": "2025-12-09 15:00"
+        }
+      ]
+    }
+  ]
+}

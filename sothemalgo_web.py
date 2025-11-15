@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for 
 import pandas as pd
 import os
 import re
@@ -164,14 +164,120 @@ def parse_output_file(file_path):
         
     except Exception as e:
         return {'error': f'Erreur lors du parsing du fichier: {str(e)}', 'groups': [], 'unassigned_ofs': []}
-    
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+
+
+def build_planning_sections(parsed_data):
+    """
+    Retourne une liste de sections:
+    [
+      {
+        'title': 'Groupe GRP1',
+        'subtitle': 'PS: PS123  |  Fenêtre: 2025-01-01 → 2025-01-28',
+        'rows': [ {article, num_order, qte_lance, date_besoin, date_proposee, statut_faisable, retard}, ... ]
+      },
+      {
+        'title': 'Non affectés',
+        'subtitle': 'OF hors groupe',
+        'rows': [...]
+      }
+    ]
+    """
+    def row_from_of(of):
+        part = (of.get('Part') or '').strip()
+        order_code = (of.get('Order_Code') or '').strip()
+        qty = (of.get('Qty') or '').strip()
+        need = (of.get('X3_Date') or '').strip()
+        start = (of.get('Start_Date') or '').strip()
+        delay = (of.get('Delay') or '').strip()
+        try:
+            delay_int = int(str(delay).strip() or "0")
+        except:
+            delay_int = 0
+        statut = "OUI" if start and delay_int == 0 else "NON"
+        return {
+            "article": part,
+            "num_order": order_code,
+            "qte_lance": qty,
+            "date_besoin": need,
+            "date_proposee": start or "—",
+            "statut_faisable": statut,
+            "retard": str(delay_int),
+        }
+
+    sections = []
+
+    # Sections par groupe
+    for g in parsed_data.get('groups', []):
+        gid = (g.get('id') or '').strip()
+        ps = (g.get('ps_product') or '—').strip()
+        window = (g.get('time_window') or '—').replace('à', '→')
+        rows = [row_from_of(of) for of in g.get('ofs', [])]
+        rows.sort(key=lambda r: (r["date_besoin"], r["num_order"]))
+        sections.append({
+            "title": f"Groupe {gid}",
+            "subtitle": f"PS: {ps}  |  Fenêtre: {window}",
+            "rows": rows
+        })
+
+    # Section Non affectés
+    unassigned = [row_from_of(of) for of in parsed_data.get('unassigned_ofs', [])]
+    unassigned.sort(key=lambda r: (r["date_besoin"], r["num_order"]))
+    sections.append({
+        "title": "Non affectés",
+        "subtitle": "OF hors groupe",
+        "rows": unassigned
+    })
+
+    return sections
+
+
+@app.route("/planning")
+def planning_page():
+    import json, os
+    # if you already have a file you render from, keep it;
+    # otherwise we can build rows directly from currently scheduled OFs.
+    # Example: read the same JSON built by smooth_and_schedule_groups:
+    path = os.path.join(os.getcwd(), "uploads", "smoothing_view.json")
+    rows = []
+    generated_at = "—"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+            generated_at = payload.get("generated_at", "—")
+            rows = payload.get("items", [])
+    except Exception as e:
+        print(f"[planning] cannot read {path}: {e}")
+
+    # ensure every row has the keys you will use in the template
+    for r in rows:
+        r.setdefault("group_id", "Hors groupe")
+        r.setdefault("product_id", "")
+        r.setdefault("designation", "")
+        r.setdefault("need_date", "")
+        r.setdefault("scheduled_start", None)
+        r.setdefault("scheduled_end", None)
+        r.setdefault("status", "")
+        r.setdefault("retard_jours", 0)
+        r.setdefault("operations", [])
+
+    return render_template(
+        "planning_modern.html",
+        generated_at=generated_at,
+        rows=rows,          # <- use this in the template
+    )
+
+
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
+        action = request.form.get('action', 'run_algorithm')  # ← ADD
+
         # Récupérer les fichiers téléchargés
         besoins_file_storage = request.files.get('besoins_file')
         nomenclature_file_storage = request.files.get('nomenclature_file')
@@ -256,7 +362,8 @@ def index():
             'log_file_path': os.path.join(app.config['UPLOAD_FOLDER'], 'sothemalgo_log_web.txt'),
             'retreat_weeks': retreat_weeks_val,
             'auto_mode': request.form.get('auto_mode', 'True').lower() == 'true',
-            'advance_retreat_weeks': retreat_weeks_val  # Utiliser retreat_weeks pour advance_retreat_weeks
+            'advance_retreat_weeks': retreat_weeks_val,  # Utiliser retreat_weeks pour advance_retreat_weeks
+            'smoothing_json_path': os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_view.json')
         }
 
         # Exécuter l'algorithme
@@ -298,9 +405,18 @@ def index():
                 operations_map,
                 params=smoothing_params # Contient output_file_path, log_file_path, etc.
             )
-            
+            # 3.2. (NOUVEAU) recalculer les stocks individuels par groupe AVANT d'écrire
+            for g in groups:
+                # le nom exact dépend de ce que tu as dans sothemalgo_grouper
+                # j’utilise un nom générique que tu avais montré
+                if hasattr(g, "calculate_consumption"):
+                    g.calculate_consumption(bom_data if bom_data else [])
             # 3.5. Générer le fichier de sortie
             write_grouped_needs_to_file(smoothing_params['output_file_path'], groups, final_updated_ofs)
+
+            # ← ADD THIS BLOCK: if the user clicked the Planning button, go to /planning
+            if action == 'plan':
+                return redirect(url_for('planning_page'))
             
             # 4. Sortie
             output_file_to_read = smoothing_params['output_file_path']
@@ -544,6 +660,35 @@ def generate_demo_visualization_data():
         },
         'lastUpdate': datetime.now().isoformat()
     }
+
+@app.route('/api/smoothing')
+def api_smoothing():
+    """Retourne le lissage (groupes, OFs, opérations) en JSON."""
+    json_path = os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_view.json')
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return jsonify(data)
+        return jsonify({"generated_at": None, "items": []})
+    except Exception as e:
+        return jsonify({"error": str(e), "items": []}), 500
+
+
+@app.route('/smoothing')
+def smoothing_page():
+    json_path = os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_view.json')
+    data = {"generated_at": None, "items": []}
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+    except Exception as e:
+        data = {"generated_at": None, "items": [], "error": str(e)}
+    return render_template('smoothing_modern.html', data=data, items=data.get('items') or [])
+
+
+
 
 @app.route('/test-button')
 def test_button():

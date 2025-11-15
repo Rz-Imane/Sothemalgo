@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Planning – Détail</title>
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+  <!-- Font Awesome pour l’icône lune/soleil -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+  <style>
+    :root {
+      /* Couleurs principales (comme les autres pages) */
+      --primary-color: #2563eb;
+      --primary-hover: #1d4ed8;
+      --secondary-color: #64748b;
+      --accent-color: #06b6d4;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --error-color: #ef4444;
+
+      /* Thème sombre par défaut */
+      --bg-dark: #0f172a;
+      --bg-card: #0b1222;
+      --bg-input: #111827;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --border-color: #334155;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+      background: linear-gradient(135deg, var(--bg-dark) 0%, #1e293b 100%);
+      color: var(--text-primary);
+      margin: 0;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Thème clair */
+    body.light-theme {
+      --bg-dark: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-input: #e2e8f0;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --border-color: #cbd5e1;
+
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      color: var(--text-primary);
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+
+    /* Header de page (titre + thème) */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0;
+    }
+
+    .meta {
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .theme-toggle {
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+    }
+
+    .theme-toggle:hover {
+      background: var(--primary-color);
+      border-color: var(--primary-color);
+      color: #ffffff;
+    }
+
+    .grp {
+      margin-top: 28px;
+    }
+
+    .grp h2 {
+      font-size: 18px;
+      margin: 0 0 10px;
+      color: var(--text-primary);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    thead th {
+      background: var(--bg-input);
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 10px;
+      border-bottom: 1px solid var(--border-color);
+      text-align: left;
+    }
+
+    tbody td {
+      padding: 10px;
+      border-bottom: 1px solid #1f2937;
+      font-size: 14px;
+    }
+
+    tbody tr:hover {
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .status {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    .ok {
+      color: var(--success-color);
+      border-color: rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.12);
+    }
+
+    .warn {
+      color: var(--warning-color);
+      border-color: rgba(245, 158, 11, 0.3);
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .fail {
+      color: var(--error-color);
+      border-color: rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.12);
+    }
+
+    .pill {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      display: inline-block;
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .ops {
+      margin-top: 6px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .empty {
+      color: var(--text-secondary);
+      text-align: center;
+      padding: 40px;
+      border: 1px dashed var(--border-color);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    .back-link {
+      margin-top: 16px;
+      display: inline-block;
+      font-size: 14px;
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="page-header">
+      <p><a href="/" class="back-link">← Retour</a></p>
+      <h1>Planning détaillé</h1>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Basculer le thème">
+        <i class="fas fa-moon"></i>
+      </button>
+    </div>
+
+    <div class="meta">Dernière génération : {{ generated_at or "—" }}</div>
+
+    {% if rows|length == 0 %}
+      <div class="empty">Aucune donnée de planning. Lance d’abord l’analyse/lissage.</div>
+    {% else %}
+      {# Regrouper les éléments par group_id (sans setdefault) #}
+      {% set groups = {} %}
+      {% for r in rows %}
+        {% set gid = r.group_id or "Hors groupe" %}
+        {% if not groups.get(gid) %}{% set _ = groups.update({gid: []}) %}{% endif %}
+        {% set _ = groups[gid].append(r) %}
+      {% endfor %}
+
+      {% for gid, list_ in groups.items() %}
+        <div class="grp">
+          <h2>{{ "Groupe " ~ gid if gid != "Hors groupe" else "OF hors groupe" }}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>OF</th>
+                <th>Article</th>
+                <th>Désignation</th>
+                <th>Besoin</th>
+                <th>Début planifié</th>
+                <th>Fin planifiée</th>
+                <th>Statut</th>
+                <th>Retard (j)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in list_ %}
+                <tr>
+                  <td>{{ it.of_id }}</td>
+                  <td>{{ it.product_id }}</td>
+                  <td>
+                    {{ it.designation or "—" }}
+                    {% if it.operations and it.operations|length > 0 %}
+                      <div class="ops">
+                        {% for op in it.operations %}
+                          • <strong>{{ op.operation }}</strong> (poste {{ op.post_id }}) :
+                          {{ op.start }} → {{ op.end }}<br/>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </td>
+                  <td><span class="pill">{{ it.need_date }}</span></td>
+                  <td>{{ it.scheduled_start or "—" }}</td>
+                  <td>{{ it.scheduled_end or "—" }}</td>
+                  <td>
+                    {% set st = (it.status or "") %}
+                    {% if "ÉCHOUÉ" in st %}
+                      <span class="status fail">{{ st }}</span>
+                    {% elif "NON" in st %}
+                      <span class="status warn">{{ st }}</span>
+                    {% elif "OUI" in st %}
+                      <span class="status ok">{{ st }}</span>
+                    {% else %}
+                      <span class="status">{{ st or "—" }}</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ it.retard_jours or 0 }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <p><a href="/" class="back-link">← Retour</a></p>
+  </div>
+
+  <script>
+    // même clé que sur les autres pages
+    const THEME_KEY = 'sothema_theme_v2';
+    let isDarkMode = true;
+
+    function applyTheme(theme) {
+      const body = document.body;
+      const icon = document.querySelector('.theme-toggle i');
+
+      if (theme === 'light') {
+        body.classList.add('light-theme');
+        isDarkMode = false;
+        if (icon) {
+          icon.classList.remove('fa-moon');
+          icon.classList.add('fa-sun');
+        }
+      } else {
+        body.classList.remove('light-theme');
+        isDarkMode = true;
+        if (icon) {
+          icon.classList.remove('fa-sun');
+          icon.classList.add('fa-moon');
+        }
+      }
+
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch (e) {
+        console.warn('Impossible de stocker le thème dans localStorage', e);
+      }
+    }
+
+    function toggleTheme() {
+      const theme = isDarkMode ? 'light' : 'dark';
+      applyTheme(theme);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      let savedTheme = null;
+      try {
+        savedTheme = localStorage.getItem(THEME_KEY);
+      } catch (e) {
+        console.warn('Impossible de lire localStorage pour le thème', e);
+      }
+
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        applyTheme(savedTheme);
+      } else {
+        // Première visite : dark
+        applyTheme('dark');
+      }
+    });
+  </script>
+</body>
+</html>

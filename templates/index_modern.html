@@ -20,7 +20,7 @@
             --warning-color: #f59e0b;
             --error-color: #ef4444;
             
-            /* Couleurs sombres */
+            /* Couleurs sombres par défaut */
             --bg-dark: #0f172a;
             --bg-card: #1e293b;
             --bg-input: #334155;
@@ -45,6 +45,19 @@
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
+        }
+
+        /* Thème clair (light theme) */
+        body.light-theme {
+            --bg-dark: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-input: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --border-color: #cbd5e1;
+
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text-primary);
         }
 
         /* Header professionnel */
@@ -99,11 +112,15 @@
             border-radius: 8px;
             cursor: pointer;
             transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .theme-toggle:hover {
             background: var(--primary-color);
             border-color: var(--primary-color);
+            color: #ffffff;
         }
 
         /* Container principal */
@@ -236,10 +253,11 @@
             transform: translateX(26px);
         }
 
-        /* Groupes de fichiers */
+        /* Groupes de fichiers – petites cartes */
         .file-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(5, 130px); /* 5 petites cartes */
+            justify-content: center;
             gap: 1rem;
             margin-bottom: 2rem;
         }
@@ -248,7 +266,7 @@
             background: var(--bg-input);
             border: 2px dashed var(--border-color);
             border-radius: 12px;
-            padding: 1.5rem;
+            padding: 0.8rem;
             text-align: center;
             transition: var(--transition);
             cursor: pointer;
@@ -267,9 +285,9 @@
         }
 
         .file-group-icon {
-            font-size: 2.5rem;
+            font-size: 1.8rem;
             color: var(--text-secondary);
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
         }
 
         .file-group:hover .file-group-icon {
@@ -278,13 +296,14 @@
 
         .file-group-title {
             font-weight: 600;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
         }
 
         .file-group-desc {
-            font-size: 0.9rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
-            margin-bottom: 1rem;
+            margin-bottom: 0.25rem;
         }
 
         .file-input {
@@ -299,10 +318,10 @@
 
         .file-status {
             display: none;
-            margin-top: 0.5rem;
-            padding: 0.5rem;
+            margin-top: 0.25rem;
+            padding: 0.25rem;
             border-radius: 6px;
-            font-size: 0.9rem;
+            font-size: 0.75rem;
         }
 
         .file-status.success {
@@ -384,6 +403,7 @@
         .btn-secondary:hover {
             background: var(--primary-color);
             border-color: var(--primary-color);
+            color: #ffffff;
         }
 
         .btn-group {
@@ -391,6 +411,21 @@
             gap: 1rem;
             justify-content: center;
             margin-top: 2rem;
+        }
+
+        .btn-success { 
+            background: var(--success-color); 
+            color: white; 
+        }
+
+        .btn-success:hover {
+            filter: brightness(1.05);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(16, 185, 129, 0.3);
+        }
+
+        .gradient-border::before {
+            pointer-events: none;   /* let clicks pass through */
         }
 
         /* Loading spinner */
@@ -514,7 +549,7 @@
                 </div>
                 <span class="logo-text">SothemaAL</span>
             </div>
-            <button class="theme-toggle" onclick="toggleTheme()">
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Basculer le thème">
                 <i class="fas fa-moon"></i>
             </button>
         </div>
@@ -566,7 +601,61 @@
                     </div>
                 </div>
 
-                <!-- Upload des fichiers -->
+                <!-- Paramètres d'algorithme (au-dessus des fichiers) -->
+                <div class="config-section">
+                    <div class="section-title">
+                        <i class="fas fa-cog"></i>
+                        Paramètres d'algorithme
+                    </div>
+                    
+                    <div class="params-grid">
+                        <div class="param-group">
+                            <label class="param-label" for="horizon_weeks">
+                                Horizon de planification (semaines)
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Nombre de semaines à considérer pour la planification (défaut: 4)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="horizon_weeks" id="horizon_weeks" class="param-input" value="4" min="1" max="52">
+                        </div>
+
+                        <div class="param-group">
+                            <label class="param-label" for="max_lot_size">
+                                Taille de lot maximum
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Taille maximum d'un lot de production (défaut: 10000)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="max_lot_size" id="max_lot_size" class="param-input" value="10000" min="1">
+                        </div>
+
+                        <div class="param-group">
+                            <label class="param-label" for="premix_window">
+                                Fenêtre Premix (heures)
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Durée de la fenêtre temporelle pour les produits Premix (défaut: 8)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="premix_window" id="premix_window" class="param-input" value="8" min="1" max="24">
+                        </div>
+
+                        <div class="param-group">
+                            <label class="param-label" for="grouping_threshold">
+                                Seuil de groupement
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">Seuil minimum pour regrouper des ordres de fabrication (défaut: 0.8)</span>
+                                </div>
+                            </label>
+                            <input type="number" name="grouping_threshold" id="grouping_threshold" class="param-input" value="0.8" min="0" max="1" step="0.1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fichiers de données (en dessous des paramètres) -->
                 <div class="config-section" id="fileUploadSection">
                     <div class="section-title">
                         <i class="fas fa-cloud-upload-alt"></i>
@@ -626,75 +715,18 @@
                     </div>
                 </div>
 
-                <!-- Paramètres d'algorithme -->
-                <div class="config-section">
-                    <div class="section-title">
-                        <i class="fas fa-cog"></i>
-                        Paramètres d'algorithme
-                    </div>
-                    
-                    <div class="params-grid">
-                        <div class="param-group">
-                            <label class="param-label" for="horizon_weeks">
-                                Horizon de planification (semaines)
-                                <div class="tooltip">
-                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
-                                    <span class="tooltiptext">Nombre de semaines à considérer pour la planification (défaut: 4)</span>
-                                </div>
-                            </label>
-                            <input type="number" name="horizon_weeks" id="horizon_weeks" class="param-input" value="4" min="1" max="52">
-                        </div>
-
-                        <div class="param-group">
-                            <label class="param-label" for="max_lot_size">
-                                Taille de lot maximum
-                                <div class="tooltip">
-                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
-                                    <span class="tooltiptext">Taille maximum d'un lot de production (défaut: 10000)</span>
-                                </div>
-                            </label>
-                            <input type="number" name="max_lot_size" id="max_lot_size" class="param-input" value="10000" min="1">
-                        </div>
-
-                        <div class="param-group">
-                            <label class="param-label" for="premix_window">
-                                Fenêtre Premix (heures)
-                                <div class="tooltip">
-                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
-                                    <span class="tooltiptext">Durée de la fenêtre temporelle pour les produits Premix (défaut: 8)</span>
-                                </div>
-                            </label>
-                            <input type="number" name="premix_window" id="premix_window" class="param-input" value="8" min="1" max="24">
-                        </div>
-
-                        <div class="param-group">
-                            <label class="param-label" for="grouping_threshold">
-                                Seuil de groupement
-                                <div class="tooltip">
-                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
-                                    <span class="tooltiptext">Seuil minimum pour regrouper des ordres de fabrication (défaut: 0.8)</span>
-                                </div>
-                            </label>
-                            <input type="number" name="grouping_threshold" id="grouping_threshold" class="param-input" value="0.8" min="0" max="1" step="0.1">
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Actions -->
                 <div class="btn-group">
                     <button type="submit" class="btn btn-primary" id="runAnalysis" 
                             onclick="handleSubmit(event)" 
                             style="cursor: pointer; pointer-events: auto; position: relative; z-index: 10;">
                         <i class="fas fa-play"></i>
-                        Lancer l'analyse
+                        Lancer le groupement
                     </button>
-                    <button type="button" class="btn btn-secondary" onclick="resetForm()">
-                        <i class="fas fa-undo"></i>
-                        Réinitialiser
-                    </button>
-                    <button type="button" class="btn btn-warning" onclick="testSubmit()" style="background: #f59e0b;">
-                        <i class="fas fa-bug"></i>
-                        Test Debug
+                    <button type="button" class="btn btn-success" id="runPlanningBtn"
+                            onclick="runPlanning(event)">
+                        <i class="fas fa-calendar-check"></i>
+                        Lancer le lissage
                     </button>
                 </div>
             </div>
@@ -709,14 +741,45 @@
     </div>
 
     <script>
+        // Nouveau nom de clé pour éviter les anciens tests
+        const THEME_KEY = 'sothema_theme_v2';
+
         // Variables globales
         let isDarkMode = true;
 
-        // Toggle du thème
+        // Appliquer un thème
+        function applyTheme(theme) {
+            const body = document.body;
+            const icon = document.querySelector('.theme-toggle i');
+
+            if (theme === 'light') {
+                body.classList.add('light-theme');
+                isDarkMode = false;
+                if (icon) {
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                }
+            } else {
+                body.classList.remove('light-theme');
+                isDarkMode = true;
+                if (icon) {
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                }
+            }
+
+            // Mémoriser le choix
+            try {
+                localStorage.setItem(THEME_KEY, theme);
+            } catch (e) {
+                console.warn('Impossible de stocker le thème dans localStorage', e);
+            }
+        }
+
+        // Toggle du thème au clic sur le bouton
         function toggleTheme() {
-            isDarkMode = !isDarkMode;
-            // Ici on pourrait implémenter un vrai toggle de thème
-            // Pour l'instant on garde le thème sombre
+            const theme = isDarkMode ? 'light' : 'dark';
+            applyTheme(theme);
         }
 
         // Gestion des fichiers
@@ -748,9 +811,20 @@
         // Gestion du formulaire - Version simplifiée
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM chargé - version simplifiée');
-            
-            // Ne plus ajouter de gestionnaire submit automatique
-            // Le onclick du bouton gère tout
+
+            // Initialiser le thème : première visite = dark
+            let savedTheme = null;
+            try {
+                savedTheme = localStorage.getItem(THEME_KEY);
+            } catch (e) {
+                console.warn('Impossible de lire localStorage pour le thème', e);
+            }
+
+            if (savedTheme === 'light' || savedTheme === 'dark') {
+                applyTheme(savedTheme);
+            } else {
+                applyTheme('dark');
+            }
             
             const form = document.getElementById('analysisForm');
             const loadingSection = document.getElementById('loadingSection');
@@ -777,22 +851,8 @@
             } else {
                 console.error('Éléments manquants - loading:', !!loadingSection, 'form:', !!form);
                 alert('Erreur technique - éléments manquants');
+                event.preventDefault();
                 return false;
-            }
-        }
-
-        // Fonction de test debug
-        function testSubmit() {
-            console.log('Test debug activé');
-            alert('Test debug : cliquez OK pour simuler la soumission');
-            
-            const form = document.getElementById('analysisForm');
-            if (form) {
-                console.log('Formulaire trouvé - test de soumission');
-                alert('Formulaire trouvé - soumission en cours...');
-                form.submit();
-            } else {
-                alert('ERREUR : Formulaire non trouvé !');
             }
         }
 
@@ -810,6 +870,23 @@
             const fileSection = document.getElementById('fileUploadSection');
             fileSection.style.opacity = '1';
             fileSection.style.pointerEvents = 'auto';
+        }
+
+        function runPlanning(e) {
+            if (e) e.preventDefault();
+            const form = document.getElementById('analysisForm');
+            const loadingSection = document.getElementById('loadingSection');
+            const actionInput = form.querySelector('input[name="action"]');
+            if (!form || !loadingSection || !actionInput) {
+                alert("Erreur technique : éléments manquants (form/loading/action).");
+                return false;
+            }
+            actionInput.value = 'plan';                 // ← tell Flask we want planning
+            loadingSection.style.display = 'block';     // same UX as first button
+            form.style.display = 'none';
+            document.querySelectorAll('.btn-group button').forEach(b => b.disabled = true);
+            form.submit();                              // normal POST
+            return true;
         }
 
         // Drag & Drop pour les fichiers
