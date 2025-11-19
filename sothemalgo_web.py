@@ -28,6 +28,7 @@ def parse_output_file(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
+        # Normaliser les sauts de ligne au cas où
         content = content.replace('\\n', '\n')
         groups = []
         unassigned_ofs = []
@@ -41,7 +42,7 @@ def parse_output_file(file_path):
         for line in lines:
             line = line.strip()
             
-            # Détecter le début d'un groupe
+            # Début d'un groupe
             if 'Group ID:' in line:
                 if current_group:
                     groups.append(current_group)
@@ -58,10 +59,12 @@ def parse_output_file(file_path):
                 in_calculated_stocks = False
                 continue
                 
-            # Détecter les informations du groupe
+            # Infos du groupe
             if in_group and current_group:
-                if 'Produit PS Principal:' in line:
-                    current_group['ps_product'] = line.split('Produit PS Principal:')[1].strip().replace('#', '').strip()
+                # ⚠️ ICI : on matche "Produit PS Principal" AVEC ou SANS "(ancre)"
+                if 'Produit PS Principal' in line and ':' in line:
+                    # on prend tout ce qui est après le premier ':'
+                    current_group['ps_product'] = line.split(':', 1)[1].strip().replace('#', '').strip()
                 elif 'Fenêtre Temporelle:' in line:
                     current_group['time_window'] = line.split('Fenêtre Temporelle:')[1].strip().replace('#', '').strip()
                 elif 'Stock PS Calculé:' in line:
@@ -81,7 +84,7 @@ def parse_output_file(file_path):
                 elif line.startswith('#') and 'OFs dans ce Groupe:' in line:
                     in_calculated_stocks = False
                 
-            # Détecter la section des OFs non affectés
+            # Section OFs non affectés
             if 'OFs Non Affectés' in line:
                 if current_group:
                     groups.append(current_group)
@@ -91,9 +94,14 @@ def parse_output_file(file_path):
                 in_calculated_stocks = False
                 continue
                 
-            # Parser les lignes de données (OFs)
+            # Lignes d'OFs (données tabulaires)
             if '\t' in line and not line.startswith('#') and line.count('\t') >= 12:
                 parts = line.split('\t')
+                
+                # Ignorer un éventuel header tabulé
+                if parts[0] == 'Part':
+                    continue
+
                 if len(parts) >= 13:
                     of_data = {
                         'Part': parts[0],
@@ -110,12 +118,15 @@ def parse_output_file(file_path):
                         'Delay': parts[11] if len(parts) > 11 else '',
                         'remaining_stock': parts[12] if len(parts) > 12 else 'N/A'
                     }
-                    if in_unassigned:
+
+                    # Statut calculé
+                    if in_unassigned or not of_data.get('GRP_FLG'):
                         of_data['Statut'] = 'Non affecté'
                     else:
-                        of_data['Statut'] = 'Affecté' if of_data.get('GRP_FLG') else 'Non affecté'
+                        of_data['Statut'] = 'Affecté'
                     
-                    if in_unassigned:
+                    # Rattachement
+                    if in_unassigned or not of_data.get('GRP_FLG'):
                         unassigned_ofs.append(of_data)
                     elif current_group:
                         current_group['ofs'].append(of_data)
@@ -123,7 +134,7 @@ def parse_output_file(file_path):
         if current_group:
             groups.append(current_group)
             
-        # CORRECTION : Identifier les groupes AVEC PS comme "productibles"
+        # Identifier les groupes AVEC PS (productibles) vs SANS PS
         groups_with_supply = []
         groups_without_supply = []
         
@@ -135,6 +146,7 @@ def parse_output_file(file_path):
             if ps_product:
                 supply_present = any((of.get('Part') or '').strip() == ps_product for of in ofs_in_group)
             
+            # fallback : voir si un OF commence par "PS" (si jamais on a des PSxxx)
             if not supply_present:
                 supply_present = any((of.get('Part') or '').startswith('PS') for of in ofs_in_group)
             
@@ -146,24 +158,30 @@ def parse_output_file(file_path):
             else:
                 groups_without_supply.append(group)
         
+        # Pour l'affichage, on préfère les groupes "productibles" s'il y en a
         groups_for_display = groups_with_supply if groups_with_supply else groups
         
+        # OFs vraiment non affectés
         truly_unassigned_ofs = list(unassigned_ofs)
+        
+        # ➜ OPTION : si tu veux continuer à remonter les OFs des groupes sans PS
+        # comme "non productibles", tu laisses ce bloc.
+        # Sur ton fichier d'exemple, groups_without_supply sera vide après correction.
+        non_productible_ofs_in_groups = []
         for group in groups_without_supply:
             for of in group.get('ofs', []):
-                of_copy = dict(of)
-                if of_copy.get('Statut') == 'Affecté':
-                    of_copy['Statut'] = 'Non affecté'
-                truly_unassigned_ofs.append(of_copy)
-        
+                non_productible_ofs_in_groups.append(of)
+
         return {
             'groups': groups_for_display,
             'unassigned_ofs': truly_unassigned_ofs,
-            'non_productible_ofs_in_groups': [of for group in groups_without_supply for of in group.get('ofs', [])]
+            'non_productible_ofs_in_groups': non_productible_ofs_in_groups
         }
         
     except Exception as e:
         return {'error': f'Erreur lors du parsing du fichier: {str(e)}', 'groups': [], 'unassigned_ofs': []}
+
+            
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')

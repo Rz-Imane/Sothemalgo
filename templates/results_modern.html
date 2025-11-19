@@ -1,1316 +1,557 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SothemaAL - Résultats de l'analyse</title>
-    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-    
-    <!-- Font Awesome pour les icônes -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <style>
-        :root {
-            /* Variables CSS pour un thème cohérent */
-            --primary-color: #2563eb;
-            --primary-hover: #1d4ed8;
-            --secondary-color: #64748b;
-            --accent-color: #06b6d4;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --error-color: #ef4444;
-            
-            /* Couleurs sombres par défaut */
-            --bg-dark: #0f172a;
-            --bg-card: #1e293b;
-            --bg-input: #334155;
-            --text-primary: #f1f5f9;
-            --text-secondary: #cbd5e1;
-            --border-color: #475569;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            
-            /* Animations */
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, var(--bg-dark) 0%, #1e293b 100%);
-            color: var(--text-primary);
-            min-height: 100vh;
-            line-height: 1.6;
-        }
-
-        /* Thème clair */
-        body.light-theme {
-            --bg-dark: #f8fafc;
-            --bg-card: #ffffff;
-            --bg-input: #e2e8f0;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
-            --border-color: #cbd5e1;
-
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-            color: var(--text-primary);
-        }
-
-        /* Header professionnel */
-        .header {
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            padding: 1rem 0;
-            box-shadow: var(--shadow);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.2rem;
-        }
-
-        .logo-text {
-            font-size: 1.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 0.75rem;
-            align-items: center;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            text-decoration: none;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-            color: white;
-        }
-
-        .btn-secondary {
-            background: var(--bg-input);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-        }
-
-        .btn:hover {
-            transform: translateY(-1px);
-        }
-
-        /* Bouton de thème dans le header */
-        .theme-toggle {
-            width: 40px;
-            padding: 0.5rem;
-            justify-content: center;
-        }
-
-        /* Container principal */
-        .container {
-            max-width: 1400px;
-            margin: 2rem auto;
-            padding: 0 2rem;
-        }
-
-        /* Stats en haut */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: var(--shadow);
-            transition: var(--transition);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-        }
-
-        .stat-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.5rem;
-        }
-
-        .stat-icon.groups {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-        }
-
-        .stat-icon.unassigned {
-            background: linear-gradient(135deg, var(--warning-color), #f59e0b);
-        }
-
-        .stat-icon.efficiency {
-            background: linear-gradient(135deg, var(--success-color), #059669);
-        }
-
-        .stat-icon.timeline {
-            background: linear-gradient(135deg, var(--accent-color), #0891b2);
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 800;
-            color: var(--text-primary);
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-
-        /* Sections principales */
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 350px;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .content-area {
-            min-height: 600px;
-        }
-
-        .sidebar {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: var(--shadow);
-            height: fit-content;
-            position: sticky;
-            top: 120px;
-        }
-
-        .sidebar-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* Navigation des onglets */
-        .tab-navigation {
-            display: flex;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 0.5rem;
-            margin-bottom: 2rem;
-            box-shadow: var(--shadow);
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 1rem;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: var(--transition);
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .tab-btn.active {
-            background: var(--primary-color);
-            color: white;
-        }
-
-        .tab-btn:hover:not(.active) {
-            background: var(--bg-input);
-            color: var(--text-primary);
-        }
-
-        /* Contenu des onglets */
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        /* Groupes */
-        .group-list {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .group-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: var(--shadow);
-            transition: var(--transition);
-        }
-
-        .group-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px -3px rgb(0 0 0 / 0.1);
-        }
-
-        .group-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-            color: white;
-            padding: 1rem 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-        }
-
-        .group-title {
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-
-        .group-toggle {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 1.2rem;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .group-info {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-            background: rgba(37, 99, 235, 0.05);
-        }
-
-        .group-info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-
-        .group-info-item {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .group-info-label {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 0.25rem;
-        }
-
-        .group-info-value {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .group-ofs {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
-
-        .group-ofs.expanded {
-            max-height: 1000px;
-        }
-
-        .of-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .of-table th,
-        .of-table td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 0.9rem;
-        }
-
-        .of-table th {
-            background: var(--bg-input);
-            color: var(--text-secondary);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-size: 0.8rem;
-        }
-
-        .of-table tr:hover {
-            background: rgba(37, 99, 235, 0.05);
-        }
-
-        /* Filtres et recherche */
-        .filters {
-            background: var(--bg-input);
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            border: 1px solid var(--border-color);
-        }
-
-        .filter-grid {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 0.75rem;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 0.9rem;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        .filter-toggle {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 0.75rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            white-space: nowrap;
-        }
-
-        /* Alertes */
-        .alert {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .alert.warning {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid var(--warning-color);
-            color: var(--warning-color);
-        }
-
-        .alert.success {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid var(--success-color);
-            color: var(--success-color);
-        }
-
-        .alert.error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid var(--error-color);
-            color: var(--error-color);
-        }
-
-        /* Actions rapides dans la sidebar */
-        .quick-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .quick-action {
-            padding: 0.75rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: var(--transition);
-            font-size: 0.9rem;
-        }
-
-        .quick-action:hover {
-            background: var(--primary-color);
-            border-color: var(--primary-color);
-            color: white;
-        }
-
-        /* Résumé dans la sidebar */
-        .summary-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 0.9rem;
-        }
-
-        .summary-item:last-child {
-            border-bottom: none;
-        }
-
-        .summary-label {
-            color: var(--text-secondary);
-        }
-
-        .summary-value {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        /* Section des OFs non affectés */
-        .unassigned-section {
-            margin-top: 3rem;
-            padding-top: 2rem;
-            border-top: 2px solid var(--border-color);
-            animation: fadeIn 0.6s ease forwards;
-        }
-
-        .unassigned-title {
-            color: var(--warning-color);
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 1.3rem;
-            font-weight: 600;
-        }
-
-        .unassigned-header {
-            background: linear-gradient(135deg, var(--warning-color), #f59e0b);
-            cursor: default !important;
-        }
-
-        .unassigned-count {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .unassigned-footer {
-            padding: 1rem;
-            text-align: center;
-            color: var(--text-secondary);
-            border-top: 1px solid var(--border-color);
-            background: rgba(245, 158, 11, 0.05);
-        }
-
-        /* Assurer que la section des OFs non affectés est toujours étendue */
-        .unassigned-section .group-ofs {
-            max-height: none !important;
-            display: block !important;
-        }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            
-            .sidebar {
-                position: static;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 0 1rem;
-            }
-            
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .tab-navigation {
-                flex-direction: column;
-            }
-            
-            .group-info-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .of-table {
-                font-size: 0.8rem;
-            }
-            
-            .of-table th,
-            .of-table td {
-                padding: 0.5rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Animation d'apparition */
-        .fade-in {
-            animation: fadeIn 0.6s ease forwards;
-        }
-
-        @keyframes fadeIn {
-            from { 
-                opacity: 0; 
-                transform: translateY(20px); 
-            }
-            to { 
-                opacity: 1; 
-                transform: translateY(0); 
-            }
-        }
-
-        /* Badge de statut */
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .status-badge.assigned {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success-color);
-            border: 1px solid var(--success-color);
-        }
-
-        .status-badge.unassigned {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--warning-color);
-            border: 1px solid var(--warning-color);
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SothemaAL - Résultats de l'analyse</title>
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
+
+  <style>
+    :root{
+      --primary-color:#2563eb;--primary-hover:#1d4ed8;--secondary-color:#64748b;--accent-color:#06b6d4;
+      --success-color:#10b981;--warning-color:#f59e0b;--error-color:#ef4444;
+      --bg-dark:#0f172a;--bg-card:#1e293b;--bg-input:#334155;--text-primary:#f1f5f9;--text-secondary:#cbd5e1;
+      --border-color:#475569;--shadow:0 4px 6px -1px rgb(0 0 0 / 0.1),0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --transition:all .3s cubic-bezier(.4,0,.2,1)
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{
+      font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:linear-gradient(135deg,var(--bg-dark) 0%,#1e293b 100%);color:var(--text-primary);min-height:100vh;line-height:1.6
+    }
+    body.light-theme{
+      --bg-dark:#f8fafc;--bg-card:#fff;--bg-input:#e2e8f0;--text-primary:#0f172a;--text-secondary:#475569;--border-color:#cbd5e1;
+      background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%);color:var(--text-primary)
+    }
+    .header{background:var(--bg-card);border-bottom:1px solid var(--border-color);padding:1rem 0;box-shadow:var(--shadow);position:sticky;top:0;z-index:100}
+    .header-content{max-width:1600px;margin:0 auto;padding:0 2rem;display:flex;justify-content:space-between;align-items:center}
+    .logo{display:flex;align-items:center;gap:12px}
+    .logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--primary-color),var(--accent-color));border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.2rem}
+    .logo-text{font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--primary-color),var(--accent-color));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .header-actions{display:flex;gap:.75rem;align-items:center}
+    .btn{padding:.75rem 1.5rem;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:var(--transition);display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+    .btn-primary{background:linear-gradient(135deg,var(--primary-color),var(--primary-hover));color:#fff}
+    .btn-secondary{background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border-color)}
+    .btn:hover{transform:translateY(-1px)}
+    .theme-toggle{width:40px;padding:.5rem;justify-content:center}
+
+    .container{max-width:1600px;margin:2rem auto;padding:0 2rem}
+    .main-content{display:block;margin-bottom:2rem}
+
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-bottom:2rem}
+    .stat-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1.5rem;box-shadow:var(--shadow);transition:var(--transition)}
+    .stat-card:hover{transform:translateY(-2px)}
+    .stat-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+    .stat-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem}
+    .stat-icon.groups{background:linear-gradient(135deg,var(--primary-color),var(--primary-hover))}
+    .stat-icon.unassigned{background:linear-gradient(135deg,var(--warning-color),#f59e0b);}
+    .stat-icon.efficiency{background:linear-gradient(135deg,var(--success-color),#059669);}
+    .stat-icon.timeline{background:linear-gradient(135deg,var(--accent-color),#0891b2);}
+    .stat-value{font-size:2rem;font-weight:800;color:var(--text-primary);margin-bottom:.5rem}
+    .stat-label{font-size:.9rem;color:var(--text-secondary)}
+
+    .tab-navigation{display:flex;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:.5rem;margin-bottom:2rem;box-shadow:var(--shadow)}
+    .tab-btn{flex:1;padding:1rem;border:none;background:transparent;color:var(--text-secondary);border-radius:8px;cursor:pointer;transition:var(--transition);font-weight:500;display:flex;align-items:center;justify-content:center;gap:8px}
+    .tab-btn.active{background:var(--primary-color);color:#fff}
+    .tab-btn:hover:not(.active){background:var(--bg-input);color:var(--text-primary)}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+
+    .group-list{display:flex;flex-direction:column;gap:1rem}
+    .group-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);transition:var(--transition)}
+    .group-card:hover{transform:translateY(-2px);box-shadow:0 10px 25px -3px rgb(0 0 0 / 0.1)}
+    .group-header{background:linear-gradient(135deg,var(--primary-color),var(--primary-hover));color:#fff;padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+    .group-title{font-weight:700;font-size:1.1rem}
+    .group-toggle{background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;transition:var(--transition)}
+    .group-info{padding:1rem 1.5rem;border-bottom:1px solid var(--border-color);background:rgba(37,99,235,.05)}
+    .group-info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+    .group-info-item{display:flex;flex-direction:column}
+    .group-info-label{font-size:.8rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.25rem}
+    .group-info-value{font-weight:600;color:var(--text-primary)}
+
+    .group-ofs{max-height:0;overflow:hidden;transition:max-height .3s ease}
+    .group-ofs.expanded{max-height:1000px}
+
+    .table-wrapper{max-height:75vh;overflow:auto;border:1px solid var(--border-color);border-radius:10px}
+    .of-table{table-layout:auto;width:100%;border-collapse:collapse}
+    .of-table th,.of-table td{padding:.75rem;text-align:left;border-bottom:1px solid var(--border-color);font-size:.9rem;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+    .of-table th{background:var(--bg-input);color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.5px;font-size:.8rem;position:sticky;top:0;z-index:1}
+    .of-table tr:hover{background:rgba(37,99,235,.05)}
+
+    .filters{background:var(--bg-input);padding:1rem;border-radius:8px;margin-bottom:1rem;border:1px solid var(--border-color)}
+    .filter-grid{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center}
+    .search-input{width:100%;padding:.75rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:.9rem}
+    .search-input:focus{outline:none;border-color:var(--primary-color)}
+    .filter-toggle{background:var(--primary-color);color:#fff;border:none;padding:.75rem 1rem;border-radius:6px;cursor:pointer;font-size:.9rem;white-space:nowrap}
+
+    .alert{padding:1rem;border-radius:8px;margin-bottom:1rem;display:flex;align-items:center;gap:12px}
+    .alert.warning{background:rgba(245,158,11,.1);border:1px solid var(--warning-color);color:var(--warning-color)}
+    .alert.success{background:rgba(16,185,129,.1);border:1px solid var(--success-color);color:var(--success-color)}
+    .alert.error{background:rgba(239,68,68,.1);border:1px solid var(--error-color);color:var(--error-color)}
+
+    .unassigned-section{margin-top:3rem;padding-top:2rem;border-top:2px solid var(--border-color);animation:fadeIn .6s ease forwards}
+    .unassigned-title{color:var(--warning-color);margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;font-size:1.3rem;font-weight:600}
+    .unassigned-header{background:linear-gradient(135deg,var(--warning-color),#f59e0b);cursor:default!important}
+    .unassigned-count{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3)}
+    .unassigned-footer{padding:1rem;text-align:center;color:var(--text-secondary);border-top:1px solid var(--border-color);background:rgba(245,158,11,.05)}
+    .unassigned-section .group-ofs{max-height:none!important;display:block!important}
+
+    .fade-in{animation:fadeIn .6s ease forwards}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+    .status-badge{padding:.25rem .75rem;border-radius:20px;font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    .status-badge.assigned{background:rgba(16,185,129,.2);color:var(--success-color);border:1px solid var(--success-color)}
+    .status-badge.unassigned{background:rgba(245,158,11,.2);color:var(--warning-color);border:1px solid var(--warning-color)}
+
+    @media (max-width:768px){
+      .container{padding:0 1rem}
+      .stats-grid{grid-template-columns:repeat(2,1fr)}
+      .tab-navigation{flex-direction:column}
+      .group-info-grid{grid-template-columns:1fr}
+      .of-table{font-size:.8rem}
+      .of-table th,.of-table td{padding:.5rem}
+      .table-wrapper{max-height:60vh}
+    }
+    @media (max-width:480px){.stats-grid{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-cogs"></i>
-                </div>
-                <span class="logo-text">SothemaAL</span>
-            </div>
-            <div class="header-actions">
-                <a href="/" class="btn btn-secondary">
-                    <i class="fas fa-arrow-left"></i>
-                    Nouvelle analyse
-                </a>
-                <a href="/data-visualization" class="btn btn-primary">
-                    <i class="fas fa-chart-bar"></i>
-                    Visualisation
-                </a>
-                <button class="btn btn-secondary" onclick="downloadResults()">
-                    <i class="fas fa-download"></i>
-                    Télécharger
-                </button>
-                <!-- Bouton thème -->
-                <button class="btn btn-secondary theme-toggle" onclick="toggleTheme()" aria-label="Basculer le thème">
-                    <i class="fas fa-moon"></i>
-                </button>
-            </div>
-        </div>
-    </header>
+  {# ========= NORMALISATION DES VARIABLES ========= #}
+  {% if groups is defined %}
+    {% set _groups = groups %}
+  {% elif grouped is defined %}
+    {% set _groups = grouped %}
+  {% elif result_groups is defined %}
+    {% set _groups = result_groups %}
+  {% else %}
+    {% set _groups = [] %}
+  {% endif %}
 
-    <!-- Container principal -->
-    <div class="container">
-        <!-- Statistiques en haut -->
-        <div class="stats-grid fade-in">
-            <!-- Statistique groupes générés -->
-            <div class="stat-card">
-                <div class="stat-header">
-                    <div class="stat-icon groups">
-                        <i class="fas fa-layer-group"></i>
-                    </div>
-                </div>
-                <div class="stat-value" id="groupsCount">{{ groups|length }}</div>
-                <div class="stat-label">Groupes</div>
-            </div>
+  {% if unassigned_ofs is defined %}
+    {% set _ua = unassigned_ofs %}
+  {% elif ofs_non_affectes is defined %}
+    {% set _ua = ofs_non_affectes %}
+  {% elif ofs_non_affectés is defined %}
+    {% set _ua = ofs_non_affectés %}
+  {% elif not_grouped_ofs is defined %}
+    {% set _ua = not_grouped_ofs %}
+  {% elif ungrouped_ofs is defined %}
+    {% set _ua = ungrouped_ofs %}
+  {% else %}
+    {% set _ua = [] %}
+  {% endif %}
 
-            <!-- Statistique OFs non affectés -->
-            <div class="stat-card">
-                <div class="stat-header">
-                    <div class="stat-icon unassigned">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                </div>
-                <div class="stat-value" id="unassignedCount">{{ unassigned_ofs|length }}</div>
-                <div class="stat-label">OFs non affectés</div>
-            </div>
+  {% if non_productible_ofs_in_groups is defined %}
+    {% set _np = non_productible_ofs_in_groups %}
+  {% elif non_productible_ofs is defined %}
+    {% set _np = non_productible_ofs %}
+  {% elif non_producible_ofs_in_groups is defined %}
+    {% set _np = non_producible_ofs_in_groups %}
+  {% else %}
+    {% set _np = [] %}
+  {% endif %}
 
-            <!-- Statistique taux d'affectation -->
-            <div class="stat-card">
-                <div class="stat-header">
-                    <div class="stat-icon efficiency">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                </div>
-                <div class="stat-value" id="efficiency">
-                    {% set productible_ofs_count = namespace(value=0) %}
-                    {% for group in groups %}
-                        {% set productible_ofs_count.value = productible_ofs_count.value + group.ofs|length %}
-                    {% endfor %}
-                    
-                    {% set total_ofs = productible_ofs_count.value + unassigned_ofs|length %}
-                    
-                    {% if total_ofs > 0 %}
-                        {{ "%.1f"|format((productible_ofs_count.value / total_ofs * 100)) }}%
-                    {% else %}
-                        0%
-                    {% endif %}
-                </div>
-                <div class="stat-label">Taux d'affectation</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-header">
-                    <div class="stat-icon timeline">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                </div>
-                <div class="stat-value" id="timeWindow">
-                    {% if groups %}
-                        {{ groups|length }}
-                    {% else %}
-                        0
-                    {% endif %}
-                </div>
-                <div class="stat-label">Fenêtres temporelles</div>
-            </div>
-        </div>
+  {# ===== KPI (corrigé avec namespace) ===== #}
+  {% set total_groups = _groups|length %}
 
-        <!-- Alerte si erreur -->
-        {% if error %}
-        <div class="alert error fade-in">
-            <i class="fas fa-exclamation-circle"></i>
-            <div>
-                <strong>Erreur :</strong> {{ error }}
-            </div>
-        </div>
-        {% endif %}
+  {% set ns = namespace(total_in_groups=0) %}
+  {% for g in _groups %}
+    {% set ns.total_in_groups = ns.total_in_groups + (g.ofs|length if g.ofs else 0) %}
+  {% endfor %}
+  {% set total_in_groups = ns.total_in_groups %}
 
-        <!-- Alerte si OFs non affectés -->
-        {% if unassigned_ofs %}
-        <div class="alert warning fade-in">
-            <i class="fas fa-exclamation-triangle"></i>
-            <div>
-                <strong>Attention :</strong> {{ unassigned_ofs|length }} ordres de fabrication n'ont pas pu être affectés à un groupe.
-            </div>
-        </div>
-        {% endif %}
+  {% set unassigned_count = (_ua|length) + (_np|length) %}
+  {% set total_ofs = total_in_groups + unassigned_count %}
+  {% set affectes = total_in_groups %}
+  {% set taux = (affectes / total_ofs * 100) if total_ofs > 0 else 0 %}
 
-        <!-- Alerte de succès -->
-        {% if groups and not error %}
-        <div class="alert success fade-in">
-            <i class="fas fa-check-circle"></i>
-            <div>
-                <strong>Succès :</strong> 
-                {% set productible_groups = groups|selectattr("has_ps")|list %}
-                {% set productible_ofs_count = namespace(value=0) %}
-                {% for group in productible_groups %}
-                    {% set productible_ofs_count.value = productible_ofs_count.value + group.ofs|length %}
-                {% endfor %}
-                
-                L'analyse a généré {{ groups|length }} groupes avec {{ productible_ofs_count.value }} OFs.
-                
-                {% set total_ofs = productible_ofs_count.value + unassigned_ofs|length %}
-                
-                Taux d'affectation : 
-                {% if total_ofs > 0 %}
-                    {{ "%.1f"|format((productible_ofs_count.value / total_ofs * 100)) }}%
-                {% else %}
-                    0%
-                {% endif %}.
-            </div>
-        </div>
-        {% endif %}
+  {% macro pick(of) -%}
+  {%- set ns = namespace(val='') -%}
+  {%- for k in varargs -%}
+    {%- if ns.val == '' -%}
+      {%- if of is mapping and (k in of) and of[k] is not none and of[k] != '' -%}
+        {%- set ns.val = of[k] -%}
+      {%- elif of is not mapping and (of|attr(k)) is not none and (of|attr(k)) != '' -%}
+        {%- set ns.val = of|attr(k) -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {{- ns.val -}}
+  {%- endmacro %}
 
-        <!-- Contenu principal -->
-        <div class="main-content">
-            <div class="content-area">
-                <!-- Navigation par onglets -->
-                <div class="tab-navigation fade-in">
-                    <button class="tab-btn active" onclick="showTab('groups')">
-                        <i class="fas fa-layer-group"></i>
-                        Groupes ({{ groups|length }})
-                    </button>
-                    <button class="tab-btn" onclick="showTab('summary')">
-                        <i class="fas fa-chart-pie"></i>
-                        Résumé
-                    </button>
-                </div>
+  {% macro status_badge(is_assigned) -%}
+    <span class="status-badge {{ 'assigned' if is_assigned else 'unassigned' }}">
+      <i class="fas fa-{{ 'check' if is_assigned else 'times' }}"></i>
+      {{ 'Affecté' if is_assigned else 'Non affecté' }}
+    </span>
+  {%- endmacro %}
 
-                <!-- Onglet des groupes -->
-                <div id="groups-tab" class="tab-content active fade-in">
-                    {% if groups %}
-                    <div class="filters">
-                        <div class="filter-grid">
-                            <input type="text" class="search-input" placeholder="Rechercher un groupe, produit ou OF..." id="groupSearch" onkeyup="filterGroups()">
-                            <button class="filter-toggle" onclick="toggleAllGroups()">
-                                <i class="fas fa-expand-alt"></i>
-                                Tout développer
-                            </button>
-                        </div>
-                    </div>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo">
+        <div class="logo-icon"><i class="fas fa-cogs"></i></div>
+        <span class="logo-text">SothemaAL</span>
+      </div>
+      <div class="header-actions">
+        <a href="/" class="btn btn-secondary"><i class="fas fa-arrow-left"></i>Nouvelle analyse</a>
+        <a href="/data-visualization" class="btn btn-primary"><i class="fas fa-chart-bar"></i>Visualisation</a>
+        <button class="btn btn-secondary" onclick="downloadResults()"><i class="fas fa-download"></i>Télécharger</button>
+        <button class="btn btn-secondary theme-toggle" onclick="toggleTheme()" aria-label="Basculer le thème"><i class="fas fa-moon"></i></button>
+      </div>
+    </div>
+  </header>
 
-                    <div class="group-list" id="groupsList">
-                        {% for group in groups %}
-                        <div class="group-card" data-group-id="{{ group.id }}">
-                            <div class="group-header" onclick="toggleGroup('{{ group.id }}')">
-                                <div>
-                                    <div class="group-title">
-                                        <i class="fas fa-layer-group"></i>
-                                        Groupe #{{ group.id }}
-                                    </div>
-                                </div>
-                                <button class="group-toggle" id="toggle-{{ group.id }}">
-                                    <i class="fas fa-chevron-down"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="group-info">
-                                <div class="group-info-grid">
-                                    <div class="group-info-item">
-                                        <span class="group-info-label">Produit Principal</span>
-                                        <span class="group-info-value">{{ group.ps_product or 'Non défini' }}</span>
-                                    </div>
-                                    <div class="group-info-item">
-                                        <span class="group-info-label">Fenêtre Temporelle</span>
-                                        <span class="group-info-value">{{ group.time_window or 'Non définie' }}</span>
-                                    </div>
-                                    <div class="group-info-item">
-                                        <span class="group-info-label">Nombre d'OFs</span>
-                                        <span class="group-info-value">{{ group.ofs|length }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="group-ofs" id="ofs-{{ group.id }}">
-                                {% if group.ofs %}
-                                <table class="of-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Part</th>
-                                            <th>Description</th>
-                                            <th>Order Code</th>
-                                            <th>FG</th>
-                                            <th>Qty</th>
-                                            <th>Date X3</th>
-                                            <th>Statut</th>
-                                            <th>remaining stock</th>   
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for of in group.ofs %}
-                                        <tr>
-                                            <td>{{ of.Part }}</td>
-                                            <td>{{ of.Description }}</td>
-                                            <td>{{ of.Order_Code }}</td>
-                                            <td>{{ of.FG }}</td>
-                                            <td>{{ of.Qty }}</td>
-                                            <td>{{ of.X3_Date }}</td>
-                                            <td>
-                                                <span class="status-badge {% if group.has_ps %}assigned{% else %}unassigned{% endif %}">
-                                                    <i class="fas fa-{% if group.has_ps %}check{% else %}times{% endif %}"></i>
-                                                    {% if group.has_ps %}
-                                                        Affecté
-                                                    {% else %}
-                                                        Non affecté
-                                                    {% endif %}
-                                                </span>
-                                            </td>
-                                            <td>{{ of.remaining_stock or 'N/A' }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                                {% else %}
-                                <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">
-                                    <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                                    <p>Aucun OF dans ce groupe</p>
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div style="text-align: center; padding: 4rem; color: var(--text-secondary);">
-                        <i class="fas fa-layer-group" style="font-size: 4rem; margin-bottom: 2rem;"></i>
-                        <h3>Aucun groupe généré</h3>
-                        <p>L'algorithme n'a pas pu créer de groupes avec les données fournies.</p>
-                    </div>
-                    {% endif %}
-                </div>
+  <div class="container">
+    <!-- Stats -->
+    <div class="stats-grid fade-in">
+      <div class="stat-card">
+        <div class="stat-header"><div class="stat-icon groups"><i class="fas fa-layer-group"></i></div></div>
+        <div class="stat-value" id="groupsCount">{{ total_groups }}</div>
+        <div class="stat-label">Groupes</div>
+      </div>
 
-                <!-- Onglet résumé -->
-                <div id="summary-tab" class="tab-content">
-                    <div class="group-card">
-                        <div class="group-header">
-                            <div class="group-title">
-                                <i class="fas fa-chart-pie"></i>
-                                Résumé de l'analyse
-                            </div>
-                        </div>
-                        
-                        <div class="group-info">
-                            <!-- Calcul des métriques -->
-                            {% set productible_ofs_count = 0 %}
-                            {% set non_productible_ofs_count = 0 %}
-                            
-                            {% for group in groups %}
-                                {% if group.has_ps %}
-                                    {% set productible_ofs_count = productible_ofs_count + group.ofs|length %}
-                                {% else %}
-                                    {% set non_productible_ofs_count = non_productible_ofs_count + group.ofs|length %}
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% set total_ofs = productible_ofs_count + non_productible_ofs_count + unassigned_ofs|length %}
-                            
-                            <div class="group-info-grid">
-                                <div class="group-info-item">
-                                    <span class="group-info-label">Total OFs traités</span>
-                                    <span class="group-info-value">{{ total_ofs }}</span>
-                                </div>
-                                <div class="group-info-item">
-                                    <span class="group-info-label">OFs</span>
-                                    <span class="group-info-value">{{ productible_ofs_count }}</span>
-                                </div>
-                                <div class="group-info-item">
-                                    <span class="group-info-label">Groupes créés</span>
-                                    <span class="group-info-value">{{ groups|length }}</span>
-                                </div>
-                                <div class="group-info-item">
-                                    <span class="group-info-label">Taux d'affectation</span>
-                                    <span class="group-info-value">
-                                        {% if total_ofs > 0 %}
-                                            {{ "%.1f"|format((productible_ofs_count / total_ofs * 100)) }}%
-                                        {% else %}
-                                            0%
-                                        {% endif %}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <div class="stat-card">
+        <div class="stat-header"><div class="stat-icon unassigned"><i class="fas fa-exclamation-triangle"></i></div></div>
+        <div class="stat-value" id="unassignedCount">{{ unassigned_count }}</div>
+        <div class="stat-label">OFs non affectés</div>
+      </div>
 
-            <!-- Sidebar -->
-            <div class="sidebar fade-in">
-                <div class="sidebar-title">
-                    <i class="fas fa-tools"></i>
-                    Actions rapides
-                </div>
-                
-                <div class="quick-actions">
-                    <a href="/display-output" class="quick-action">
-                        <i class="fas fa-file-alt"></i>
-                        Fichier brut
-                    </a>
-                    <a href="/data-visualization" class="quick-action">
-                        <i class="fas fa-chart-bar"></i>
-                        Graphiques
-                    </a>
-                    <button class="quick-action" onclick="exportToCSV()">
-                        <i class="fas fa-file-csv"></i>
-                        Export CSV
-                    </button>
-                    <button class="quick-action" onclick="printResults()">
-                        <i class="fas fa-print"></i>
-                        Imprimer
-                    </button>
-                </div>
+      <div class="stat-card">
+        <div class="stat-header"><div class="stat-icon efficiency"><i class="fas fa-chart-line"></i></div></div>
+        <div class="stat-value" id="efficiency">{{ "%.1f"|format(taux) }}%</div>
+        <div class="stat-label">Taux d'affectation</div>
+      </div>
 
-                <div class="sidebar-title">
-                    <i class="fas fa-info-circle"></i>
-                    Informations
-                </div>
-                
-                <div class="summary-item">
-                    <span class="summary-label">Algorithme</span>
-                    <span class="summary-value">SothemaAL v2.0</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Horizon</span>
-                    <span class="summary-value">12 semaines</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Mode</span>
-                    <span class="summary-value">Multiniveau</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Fenêtre Premix</span>
-                    <span class="summary-value">8 heures</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Date d'analyse</span>
-                    <span class="summary-value">{{ moment().format('DD/MM/YYYY HH:mm') if moment else 'Maintenant' }}</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- SECTION DES OFs NON AFFECTÉS EN BAS -->
-        {% if unassigned_ofs or non_productible_ofs_in_groups %}
-        <div class="unassigned-section fade-in">
-            <h3 class="unassigned-title">
-                <i class="fas fa-exclamation-triangle"></i>
-                Ordres de Fabrication Non Affectés ({{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs)
-            </h3>
-            
-            <div class="group-card">
-                <div class="group-header unassigned-header">
-                    <div class="group-title">
-                        <i class="fas fa-list"></i>
-                        Liste des OFs non affectés
-                    </div>
-                    <span class="status-badge unassigned-count">
-                        {{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs
-                    </span>
-                </div>
-                
-                <div class="group-ofs expanded">
-                    <table class="of-table">
-                        <thead>
-                            <tr>
-                                <th>Part</th>
-                                <th>Description</th>
-                                <th>Order Code</th>
-                                <th>FG</th>
-                                <th>Qty</th>
-                                <th>Date X3</th>
-                                <th>Statut</th>
-                                <th>remaining_stock</th> 
-                                <th>Raison</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- OFs complètement non affectés -->
-                            {% for of in unassigned_ofs %}
-                            <tr>
-                                <td>{{ of.Part }}</td>
-                                <td>{{ of.Description }}</td>
-                                <td>{{ of.Order_Code }}</td>
-                                <td>{{ of.FG }}</td>
-                                <td>{{ of.Qty }}</td>
-                                <td>{{ of.X3_Date }}</td>
-                                <td>
-                                    <span class="status-badge unassigned">
-                                        <i class="fas fa-times"></i>
-                                        Non affecté
-                                    </span>
-                                </td>
-                                <td>{{ of.remaining_stock or 'N/A' }}</td>
-                                <td>Non groupé</td>
-                            </tr>
-                            {% endfor %}
-                            
-                            <!-- OFs dans des groupes sans PS -->
-                            {% for of in non_productible_ofs_in_groups %}
-                            <tr>
-                                <td>{{ of.Part }}</td>
-                                <td>{{ of.Description }}</td>
-                                <td>{{ of.Order_Code }}</td>
-                                <td>{{ of.FG }}</td>
-                                <td>{{ of.Qty }}</td>
-                                <td>{{ of.X3_Date }}</td>
-                                <td>
-                                    <span class="status-badge unassigned">
-                                        <i class="fas fa-times"></i>
-                                        Non productible
-                                    </span>
-                                </td>
-                                <td>{{ of.remaining_stock or 'N/A' }}</td>
-                                <td>Groupe sans PS</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    
-                    {% if (unassigned_ofs|length + non_productible_ofs_in_groups|length) > 10 %}
-                    <div class="unassigned-footer">
-                        <i class="fas fa-info-circle"></i>
-                        {{ (unassigned_ofs|length + non_productible_ofs_in_groups|length) }} OFs non productibles au total
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
+      <div class="stat-card">
+        <div class="stat-header"><div class="stat-icon timeline"><i class="fas fa-clock"></i></div></div>
+        <div class="stat-value" id="timeWindow">{{ total_groups }}</div>
+        <div class="stat-label">Fenêtres temporelles</div>
+      </div>
     </div>
 
-    <script>
-        // ===== Thème : même logique que la page principale =====
-        const THEME_KEY = 'sothema_theme_v2';
-        let isDarkMode = true;
+    {% if error %}
+    <div class="alert error fade-in">
+      <i class="fas fa-exclamation-circle"></i>
+      <div><strong>Erreur :</strong> {{ error }}</div>
+    </div>
+    {% endif %}
 
-        function applyTheme(theme) {
-            const body = document.body;
-            const icon = document.querySelector('.theme-toggle i');
+    {% if unassigned_count > 0 %}
+    <div class="alert warning fade-in">
+      <i class="fas fa-exclamation-triangle"></i>
+      <div><strong>Attention :</strong> {{ unassigned_count }} ordres de fabrication n'ont pas pu être affectés à un groupe.</div>
+    </div>
+    {% endif %}
 
-            if (theme === 'light') {
-                body.classList.add('light-theme');
-                isDarkMode = false;
-                if (icon) {
-                    icon.classList.remove('fa-moon');
-                    icon.classList.add('fa-sun');
-                }
-            } else {
-                body.classList.remove('light-theme');
-                isDarkMode = true;
-                if (icon) {
-                    icon.classList.remove('fa-sun');
-                    icon.classList.add('fa-moon');
-                }
-            }
+    {% if _groups and not error %}
+    <div class="alert success fade-in">
+      <i class="fas fa-check-circle"></i>
+      <div>
+        <strong>Succès :</strong>
+        L'analyse a généré {{ total_groups }} groupes avec {{ total_in_groups }} OFs.
+        Taux d'affectation : {{ "%.1f"|format(taux) }}%.
+      </div>
+    </div>
+    {% endif %}
 
-            try {
-                localStorage.setItem(THEME_KEY, theme);
-            } catch (e) {
-                console.warn('Impossible de stocker le thème dans localStorage', e);
-            }
+    <div class="main-content">
+      <div class="content-area">
+        <div class="tab-navigation fade-in">
+          <button class="tab-btn active" onclick="showTab('groups', this)"><i class="fas fa-layer-group"></i>Groupes ({{ total_groups }})</button>
+          <button class="tab-btn" onclick="showTab('summary', this)"><i class="fas fa-chart-pie"></i>Résumé</button>
+        </div>
+
+        <!-- Onglet groupes -->
+        <div id="groups-tab" class="tab-content active fade-in">
+          {% if _groups %}
+          <div class="filters">
+            <div class="filter-grid">
+              <input type="text" class="search-input" placeholder="Rechercher un groupe, produit ou OF..." id="groupSearch" onkeyup="filterGroups()"/>
+              <button class="filter-toggle" onclick="toggleAllGroups(this)"><i class="fas fa-expand-alt"></i> Tout développer</button>
+            </div>
+          </div>
+
+          <div class="group-list" id="groupsList">
+            {% for group in _groups %}
+            <div class="group-card" data-group-id="{{ group.id }}">
+              <div class="group-header" onclick="toggleGroup('{{ group.id }}')">
+                <div class="group-title"><i class="fas fa-layer-group"></i> Groupe #{{ group.id }}</div>
+                <button class="group-toggle" id="toggle-{{ group.id }}"><i class="fas fa-chevron-down"></i></button>
+              </div>
+
+              <div class="group-info">
+                <div class="group-info-grid">
+                  <div class="group-info-item">
+                    <span class="group-info-label">Produit Principal</span>
+                    <span class="group-info-value">{{ group.ps_product or group.ps_product_id or 'Non défini' }}</span>
+                  </div>
+                  <div class="group-info-item">
+                    <span class="group-info-label">Fenêtre Temporelle</span>
+                    <span class="group-info-value">
+                      {% if group.time_window %}{{ group.time_window }}
+                      {% elif group.time_window_start and group.time_window_end %}
+                        {{ group.time_window_start.strftime('%Y-%m-%d') }} – {{ group.time_window_end.strftime('%Y-%m-%d') }}
+                      {% else %}Non définie{% endif %}
+                    </span>
+                  </div>
+                  <div class="group-info-item">
+                    <span class="group-info-label">Nombre d'OFs</span>
+                    <span class="group-info-value">{{ group.ofs|length }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="group-ofs" id="ofs-{{ group.id }}">
+                {% if group.ofs %}
+                <div class="table-wrapper">
+                  <table class="of-table" data-group-id="{{ group.id }}">
+                    <thead>
+                      <tr>
+                        <th>Part</th><th>Description</th><th>Order Code</th><th>FG</th><th>Qty</th><th>Date X3</th><th>Statut</th><th>Remaining Stock</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for of in group.ofs %}
+                      <tr>
+                        <td>{{ pick(of,'Part','part','product_id') }}</td>
+                        <td>{{ pick(of,'Description','description','designation') }}</td>
+                        <td>{{ pick(of,'Order_Code','order_code','OF','of_code','id') }}</td>
+                        <td>{{ pick(of,'FG','fg','PS','ps','fg') }}</td>
+                        <td>{{ pick(of,'Qty','qty','Quantity','quantity') }}</td>
+                        <td>{{ pick(of,'X3_Date','x3_date','Date','date','need_date') }}</td>
+                        <td>{{ status_badge(true) }}</td>
+                        <td>{{ pick(of,'remaining_stock','individual_product_stock','stock','Stock') or 'N/A' }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                {% else %}
+                <div style="padding:2rem;text-align:center;color:var(--text-secondary);">
+                  <i class="fas fa-inbox" style="font-size:2rem;margin-bottom:1rem;"></i>
+                  <p>Aucun OF dans ce groupe</p>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div style="text-align:center;padding:4rem;color:var(--text-secondary);">
+            <i class="fas fa-layer-group" style="font-size:4rem;margin-bottom:2rem;"></i>
+            <h3>Aucun groupe généré</h3>
+            <p>L'algorithme n'a pas pu créer de groupes avec les données fournies.</p>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Onglet résumé -->
+        <div id="summary-tab" class="tab-content">
+          <div class="group-card">
+            <div class="group-header">
+              <div class="group-title"><i class="fas fa-chart-pie"></i> Résumé de l'analyse</div>
+            </div>
+            <div class="group-info">
+              <div class="group-info-grid">
+                <div class="group-info-item">
+                  <span class="group-info-label">Total OFs traités</span>
+                  <span class="group-info-value">{{ total_ofs }}</span>
+                </div>
+                <div class="group-info-item">
+                  <span class="group-info-label">OFs affectés</span>
+                  <span class="group-info-value">{{ affectes }}</span>
+                </div>
+                <div class="group-info-item">
+                  <span class="group-info-label">Groupes créés</span>
+                  <span class="group-info-value">{{ total_groups }}</span>
+                </div>
+                <div class="group-info-item">
+                  <span class="group-info-label">Taux d'affectation</span>
+                  <span class="group-info-value">{{ "%.1f"|format(taux) }}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div> <!-- /content-area -->
+    </div> <!-- /main-content -->
+
+    {% if unassigned_count > 0 %}
+    <div class="unassigned-section fade-in">
+      <h3 class="unassigned-title">
+        <i class="fas fa-exclamation-triangle"></i>
+        Ordres de Fabrication Non Affectés ({{ unassigned_count }} OFs)
+      </h3>
+      <div class="group-card">
+        <div class="group-header unassigned-header">
+          <div class="group-title"><i class="fas fa-list"></i>Liste des OFs non affectés</div>
+          <span class="status-badge unassigned-count">{{ unassigned_count }} OFs</span>
+        </div>
+        <div class="group-ofs expanded">
+          <div class="table-wrapper">
+            <table class="of-table" id="unassigned-table">
+              <thead>
+                <tr>
+                  <th>Part</th><th>Description</th><th>Order Code</th><th>FG</th><th>Qty</th><th>Date X3</th><th>Statut</th><th>Remaining Stock</th><th>Raison</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for of in _ua %}
+                <tr>
+                  <td>{{ pick(of,'Part','part','product_id') }}</td>
+                  <td>{{ pick(of,'Description','description','designation') }}</td>
+                  <td>{{ pick(of,'Order_Code','order_code','OF','of_code','id') }}</td>
+                  <td>{{ pick(of,'FG','fg','PS','ps','fg') }}</td>
+                  <td>{{ pick(of,'Qty','qty','Quantity','quantity') }}</td>
+                  <td>{{ pick(of,'X3_Date','x3_date','Date','date','need_date') }}</td>
+                  <td>{{ status_badge(false) }}</td>
+                  <td>{{ pick(of,'remaining_stock','individual_product_stock','stock','Stock') or 'N/A' }}</td>
+                  <td>Non groupé</td>
+                </tr>
+                {% endfor %}
+                {% for of in _np %}
+                <tr>
+                  <td>{{ pick(of,'Part','part','product_id') }}</td>
+                  <td>{{ pick(of,'Description','description','designation') }}</td>
+                  <td>{{ pick(of,'Order_Code','order_code','OF','of_code','id') }}</td>
+                  <td>{{ pick(of,'FG','fg','PS','ps','fg') }}</td>
+                  <td>{{ pick(of,'Qty','qty','Quantity','quantity') }}</td>
+                  <td>{{ pick(of,'X3_Date','x3_date','Date','date','need_date') }}</td>
+                  <td>{{ status_badge(false) }}</td>
+                  <td>{{ pick(of,'remaining_stock','individual_product_stock','stock','Stock') or 'N/A' }}</td>
+                  <td>Groupe sans PS</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div> <!-- /container -->
+
+  <script>
+    const THEME_KEY='sothema_theme_v2';let isDarkMode=true;
+    function applyTheme(theme){
+      const body=document.body;const icon=document.querySelector('.theme-toggle i');
+      if(theme==='light'){body.classList.add('light-theme');isDarkMode=false; if(icon){icon.classList.remove('fa-moon');icon.classList.add('fa-sun');}}
+      else{body.classList.remove('light-theme');isDarkMode=true; if(icon){icon.classList.remove('fa-sun');icon.classList.add('fa-moon');}}
+      try{localStorage.setItem(THEME_KEY,theme);}catch(e){console.warn('Impossible de stocker le thème',e);}
+    }
+    function toggleTheme(){applyTheme(isDarkMode?'light':'dark');}
+    document.addEventListener('DOMContentLoaded',function(){
+      let saved=null;try{saved=localStorage.getItem(THEME_KEY);}catch(e){}
+      applyTheme((saved==='light'||saved==='dark')?saved:'dark');
+    });
+
+    function $(sel,ctx=document){return ctx.querySelector(sel);}
+    function $all(sel,ctx=document){return Array.from(ctx.querySelectorAll(sel));}
+
+    function showTab(tabName, el){
+      document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.getElementById(tabName+'-tab').classList.add('active');
+      if(el) el.classList.add('active');
+    }
+    document.addEventListener('DOMContentLoaded',()=>{
+      const btns=document.querySelectorAll('.tab-navigation .tab-btn');
+      btns.forEach(btn=>{
+        const handler=btn.getAttribute('onclick');
+        if(handler && !handler.includes('this')){
+          btn.setAttribute('onclick',handler.replace(')',', this)'));
         }
+      });
+    });
 
-        function toggleTheme() {
-            const theme = isDarkMode ? 'light' : 'dark';
-            applyTheme(theme);
+    function toggleGroup(groupId){
+      const ofsElement=document.getElementById('ofs-'+groupId);
+      const toggleIcon=document.querySelector('#toggle-'+groupId+' i');
+      const willExpand=!ofsElement.classList.contains('expanded');
+      if(willExpand){
+        ofsElement.classList.add('expanded');
+        if(toggleIcon){toggleIcon.classList.remove('fa-chevron-down');toggleIcon.classList.add('fa-chevron-up');}
+      }else{
+        ofsElement.classList.remove('expanded');
+        if(toggleIcon){toggleIcon.classList.remove('fa-chevron-up');toggleIcon.classList.add('fa-chevron-down');}
+      }
+    }
+
+    let allGroupsExpanded=false;
+    function toggleAllGroups(el){
+      allGroupsExpanded=!allGroupsExpanded;
+      const cards=$all('.group-card');
+      let i=0;
+      function step(){
+        const chunk=10;
+        const end=Math.min(i+chunk,cards.length);
+        for(;i<end;i++){
+          const card=cards[i];
+          const gid=card.getAttribute('data-group-id');
+          const ofsElement=$('#ofs-'+gid,card);
+          const icon=$('#toggle-'+gid+' i',card);
+          if(!ofsElement || !icon) continue;
+          if(allGroupsExpanded){
+            ofsElement.classList.add('expanded');
+            icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up');
+          }else{
+            ofsElement.classList.remove('expanded');
+            icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down');
+          }
         }
+        if(i<cards.length){ requestAnimationFrame(step); }
+      }
+      requestAnimationFrame(step);
+      if(el){
+        el.innerHTML = allGroupsExpanded
+          ? '<i class="fas fa-compress-alt"></i> Tout réduire'
+          : '<i class="fas fa-expand-alt"></i> Tout développer';
+      }
+    }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            let savedTheme = null;
-            try {
-                savedTheme = localStorage.getItem(THEME_KEY);
-            } catch (e) {
-                console.warn('Impossible de lire localStorage pour le thème', e);
-            }
+    function filterGroups(){
+      const searchTerm=document.getElementById('groupSearch').value.toLowerCase();
+      const groups=document.querySelectorAll('.group-card');
+      groups.forEach(group=>{
+        const headerText=group.querySelector('.group-header').textContent.toLowerCase();
+        const infoText=group.querySelector('.group-info').textContent.toLowerCase();
+        const match=headerText.includes(searchTerm)||infoText.includes(searchTerm);
+        group.style.display=match?'block':'none';
+      });
+    }
 
-            if (savedTheme === 'light' || savedTheme === 'dark') {
-                applyTheme(savedTheme);
-            } else {
-                applyTheme('dark'); // première visite : dark
-            }
-        });
+    function downloadResults(){
+      const link=document.createElement('a');
+      link.href='/display-output';
+      link.download='resultats_groupement_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.txt';
+      link.click();
+    }
+    function exportToCSV(){ alert("Fonctionnalité d'export CSV en cours de développement."); }
+    function printResults(){ window.print(); }
 
-        // ===== Logique spécifique à la page =====
-        let allGroupsExpanded = false;
+    window.addEventListener('load',function(){
+      const elements=document.querySelectorAll('.fade-in');
+      elements.forEach((el,idx)=>{
+        setTimeout(()=>{
+          el.style.opacity='0';el.style.transform='translateY(20px)';
+          el.style.transition='opacity .6s ease, transform .6s ease';
+          setTimeout(()=>{el.style.opacity='1';el.style.transform='translateY(0)';},100);
+        },idx*100);
+      });
+    });
 
-        // Gestion des onglets
-        function showTab(tabName) {
-            // Masquer tous les onglets
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Désactiver tous les boutons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Afficher l'onglet sélectionné
-            document.getElementById(tabName + '-tab').classList.add('active');
-            
-            // Activer le bouton correspondant
-            event.target.classList.add('active');
-        }
-
-        // Toggle d'un groupe
-        function toggleGroup(groupId) {
-            const ofsElement = document.getElementById('ofs-' + groupId);
-            const toggleIcon = document.querySelector('#toggle-' + groupId + ' i');
-            
-            if (ofsElement.classList.contains('expanded')) {
-                ofsElement.classList.remove('expanded');
-                toggleIcon.classList.remove('fa-chevron-up');
-                toggleIcon.classList.add('fa-chevron-down');
-            } else {
-                ofsElement.classList.add('expanded');
-                toggleIcon.classList.remove('fa-chevron-down');
-                toggleIcon.classList.add('fa-chevron-up');
-            }
-        }
-
-        // Toggle tous les groupes
-        function toggleAllGroups() {
-            const button = event.target;
-            const groups = document.querySelectorAll('.group-ofs');
-            const toggleIcons = document.querySelectorAll('.group-toggle i');
-            
-            allGroupsExpanded = !allGroupsExpanded;
-            
-            groups.forEach(group => {
-                if (allGroupsExpanded) {
-                    group.classList.add('expanded');
-                } else {
-                    group.classList.remove('expanded');
-                }
-            });
-            
-            toggleIcons.forEach(icon => {
-                if (allGroupsExpanded) {
-                    icon.classList.remove('fa-chevron-down');
-                    icon.classList.add('fa-chevron-up');
-                } else {
-                    icon.classList.remove('fa-chevron-up');
-                    icon.classList.add('fa-chevron-down');
-                }
-            });
-            
-            // Mettre à jour le texte du bouton
-            if (allGroupsExpanded) {
-                button.innerHTML = '<i class="fas fa-compress-alt"></i> Tout réduire';
-            } else {
-                button.innerHTML = '<i class="fas fa-expand-alt"></i> Tout développer';
-            }
-        }
-
-        // Filtrage des groupes
-        function filterGroups() {
-            const searchTerm = document.getElementById('groupSearch').value.toLowerCase();
-            const groups = document.querySelectorAll('.group-card');
-            
-            groups.forEach(group => {
-                const groupText = group.textContent.toLowerCase();
-                if (groupText.includes(searchTerm)) {
-                    group.style.display = 'block';
-                } else {
-                    group.style.display = 'none';
-                }
-            });
-        }
-
-        // Télécharger les résultats
-        function downloadResults() {
-            const link = document.createElement('a');
-            link.href = '/display-output';
-            link.download = 'resultats_groupement_' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.txt';
-            link.click();
-        }
-
-        // Export CSV
-        function exportToCSV() {
-            alert('Fonctionnalité d\'export CSV en cours de développement.');
-        }
-
-        // Impression
-        function printResults() {
-            window.print();
-        }
-
-        // Animation d'apparition au chargement
-        window.addEventListener('load', function() {
-            const elements = document.querySelectorAll('.fade-in');
-            elements.forEach((element, index) => {
-                setTimeout(() => {
-                    element.style.opacity = '0';
-                    element.style.transform = 'translateY(20px)';
-                    element.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                    
-                    setTimeout(() => {
-                        element.style.opacity = '1';
-                        element.style.transform = 'translateY(0)';
-                    }, 100);
-                }, index * 100);
-            });
-        });
-
-        // Raccourcis clavier
-        document.addEventListener('keydown', function(e) {
-            // Ctrl + F pour la recherche
-            if (e.ctrlKey && e.key === 'f') {
-                e.preventDefault();
-                const activeTab = document.querySelector('.tab-content.active');
-                const searchInput = activeTab.querySelector('.search-input');
-                if (searchInput) {
-                    searchInput.focus();
-                }
-            }
-            
-            // Esc pour fermer la recherche
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.search-input').forEach(input => {
-                    input.value = '';
-                });
-            }
-        });
-    </script>
+    document.addEventListener('keydown',function(e){
+      if(e.ctrlKey && e.key==='f'){
+        e.preventDefault();
+        const activeTab=document.querySelector('.tab-content.active');
+        const searchInput=activeTab.querySelector('.search-input');
+        if(searchInput) searchInput.focus();
+      }
+      if(e.key==='Escape'){ document.querySelectorAll('.search-input').forEach(i=>i.value=''); }
+    });
+  </script>
 </body>
 </html>
