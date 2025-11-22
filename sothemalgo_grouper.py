@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, time, date
+from datetime import datetime, timedelta, time, date 
 from collections import defaultdict, deque
 import calendar
 import csv
@@ -160,17 +160,38 @@ class ManufacturingOrder:
 
 
 class BOMEntry:
-    def __init__(self, parent_product_id, child_product_id, quantity_child_per_parent, child_bom_level):
+    def __init__(
+        self,
+        parent_product_id,
+        child_product_id,
+        quantity_child_per_parent,
+        child_bom_level,
+        parent_bom_level=None,
+    ):
         self.parent_product_id = parent_product_id
         self.child_product_id = child_product_id
         self.quantity_child_per_parent = try_parse_float(quantity_child_per_parent)
-        self.child_bom_level = int(child_bom_level)
+
+        # Niveau BOM de l'enfant
+        try:
+            self.child_bom_level = int(child_bom_level) if child_bom_level not in (None, "") else 0
+        except Exception:
+            self.child_bom_level = 0
+
+        # Nouveau : niveau BOM du parent (optionnel)
+        if parent_bom_level not in (None, ""):
+            try:
+                self.parent_bom_level = int(parent_bom_level)
+            except Exception:
+                self.parent_bom_level = 0
+        else:
+            self.parent_bom_level = 0
 
     def __repr__(self):
         return (
             f"BOM(parent='{self.parent_product_id}' uses "
             f"{self.quantity_child_per_parent} of child='{self.child_product_id}' "
-            f"at level {self.child_bom_level})"
+            f"(child_lvl={self.child_bom_level}, parent_lvl={self.parent_bom_level}))"
         )
 
 
@@ -217,17 +238,25 @@ class Group:
         of_to_add.assigned_group_id = self.id
         of_to_add.status = "ASSIGNED"
 
-    
     def calculate_consumption(self, bom_data):
         """
-        Calcule la consommation entre OFs d'un même groupe en respectant la nomenclature (BOM)
-        et en appliquant une logique FIFO par produit.
+        Nouveau calcul de stock adapté à la logique "on commence par le plus haut niveau BOM".
+
+        Pour chaque groupe :
+          1. On calcule la quantité produite par produit (somme des OFs du groupe).
+          2. On initialise le stock de chaque produit avec sa quantité produite.
+          3. Pour chaque relation de nomenclature (parent -> composant) :
+                consommation_enfant = qty_produite_parent * qty_child_per_parent
+             On soustrait cette consommation du stock du composant.
+          4. On distribue le stock net par produit sur les OFs correspondants (FIFO sur la date besoin).
 
         Remplit :
           - self.component_stocks : stock net par produit (production - consommation)
-          - self.individual_product_stocks : stock par produit au niveau des OF
-          - of.individual_product_stock : stock par OF
+          - self.individual_product_stocks : stock net par produit dans le groupe
+          - of.individual_product_stock : stock affecté à chaque OF
         """
+
+        from collections import defaultdict
 
         def norm(x: str) -> str:
             if x is None:
@@ -236,145 +265,154 @@ class Group:
             s = ''.join(s.split())
             return s.upper()
 
-        # -------------------------
-        # 1. Construction du lookup BOM
-        # -------------------------
-        bom_lookup = defaultdict(list)
-        level_by_product = {}
+        if not self.ofs:
+            self.component_stocks = {}
+            self.individual_product_stocks = {}
+            return
 
+        # -------------------------------------------------
+        # 1. Niveaux BOM par produit (ChildBOMLevel / ParentBOMLevel + fallback OF.bom_level)
+        # -------------------------------------------------
+        product_level = {}
+
+        # Niveaux provenant de la nomenclature
         for bom in bom_data:
             p = norm(bom.parent_product_id)
             c = norm(bom.child_product_id)
-            if p and c:
-                bom_lookup[p].append((c, bom.quantity_child_per_parent))
-            if c:
+
+            try:
+                c_lvl = int(getattr(bom, "child_bom_level", 0) or 0)
+            except Exception:
+                c_lvl = 0
+
+            try:
+                p_lvl = int(getattr(bom, "parent_bom_level", 0) or 0)
+            except Exception:
+                p_lvl = 0
+
+            if c and c_lvl > 0:
+                # plus le niveau est élevé, plus le composant est "profond"
+                product_level[c] = c_lvl if c not in product_level else max(product_level[c], c_lvl)
+            if p and p_lvl > 0:
+                product_level[p] = p_lvl if p not in product_level else max(product_level[p], p_lvl)
+
+        # Produits présents dans ce groupe
+        group_products = {norm(of.product_id) for of in self.ofs}
+
+        # Fallback : si certains produits du groupe n'ont pas de niveau dans le BOM,
+        # on utilise leur bom_level issu du fichier besoins (colonne CAT).
+        for pid in group_products:
+            if pid not in product_level:
+                # On prend n'importe quel OF de ce produit
+                of0 = next(of for of in self.ofs if norm(of.product_id) == pid)
                 try:
-                    lvl = int(getattr(bom, "child_bom_level", 0))
+                    lvl = int(getattr(of0, "bom_level", 0) or 0)
                 except Exception:
                     lvl = 0
-                if lvl:
-                    if c in level_by_product:
-                        level_by_product[c] = min(level_by_product[c], lvl)
-                    else:
-                        level_by_product[c] = lvl
+                product_level[pid] = lvl
 
-        # Les produits de niveau 1 dans le BOM sont typiquement les "premix"
-        premix_products = {pid for pid, lvl in level_by_product.items() if lvl == 1}
-
-        # -------------------------
-        # 2. Tri des OFs dans l'ordre de production (premix -> SF -> PF)
-        # -------------------------
-        type_priority = {"PS": 0, "SF": 1, "PF": 2}
-
-        def sort_key(of):
+        # -------------------------------------------------
+        # 2. Quantités produites par produit (somme des OFs de ce groupe)
+        # -------------------------------------------------
+        produced_qty = defaultdict(float)
+        for of in self.ofs:
             pid = norm(of.product_id)
-            is_premix = pid in premix_products or "PREMIX" in (of.designation or "").upper()
-            return (
-                0 if is_premix else 1,
-                of.bom_level,
-                of.need_date,
-                type_priority.get(of.product_type, 3),
-            )
+            produced_qty[pid] += float(of.quantity)
 
-        sorted_ofs = sorted(self.ofs, key=sort_key)
+        if not produced_qty:
+            self.component_stocks = {}
+            self.individual_product_stocks = {}
+            for of in self.ofs:
+                of.individual_product_stock = 0.0
+            return
 
-        # -------------------------
-        # 3. Simulation FIFO production / consommation
-        # -------------------------
-        fifo_supply = defaultdict(deque)        # produit -> deque({of_id, remaining})
+        # Liste des niveaux présents dans le groupe
+        levels_in_group = {product_level.get(pid, 0) for pid in produced_qty.keys()}
+        max_level = max(levels_in_group) if levels_in_group else 0
+        min_level = min(levels_in_group) if levels_in_group else 0
+
+        # -------------------------------------------------
+        # 3. Construction du BOM par parent (dans le contexte du groupe)
+        # -------------------------------------------------
+        bom_by_parent = defaultdict(list)
+        for bom in bom_data:
+            p = norm(bom.parent_product_id)
+            c = norm(bom.child_product_id)
+            if not p or not c:
+                continue
+            # On ne considère la conso que si le parent existe dans le groupe
+            if p in produced_qty:
+                bom_by_parent[p].append((c, float(bom.quantity_child_per_parent)))
+
+        # -------------------------------------------------
+        # 4. Calcul du stock net par produit (niveau le plus élevé -> niveau le plus faible)
+        # -------------------------------------------------
+        product_stock = {pid: 0.0 for pid in produced_qty.keys()}
+        product_consumption = defaultdict(float)
+
+        # On parcourt les niveaux du plus "profond" (composant) vers le plus "haut" (PF)
+        # pour respecter l'idée "on produit d'abord les niveaux les plus élevés".
+        for lvl in range(max_level, min_level - 1, -1):
+            # Tous les produits à ce niveau
+            for pid, plvl in product_level.items():
+                if plvl != lvl:
+                    continue
+                if pid not in produced_qty:
+                    continue  # pas d'OF pour ce produit dans ce groupe
+
+                qty_prod = produced_qty[pid]
+                if qty_prod <= 0:
+                    continue
+
+                # On "produit" ce niveau : le stock de ce produit augmente de sa quantité produite
+                product_stock[pid] = product_stock.get(pid, 0.0) + qty_prod
+
+                # Puis on consomme ses composants selon la nomenclature
+                for child_id, q_child in bom_by_parent.get(pid, []):
+                    # Conso seulement si le composant existe dans le groupe
+                    if child_id not in produced_qty:
+                        continue
+                    need = qty_prod * q_child
+                    product_stock[child_id] = product_stock.get(child_id, 0.0) - need
+                    product_consumption[child_id] += need
+
+        # -------------------------------------------------
+        # 5. Répartition du stock net par produit sur les OFs (FIFO sur date besoin)
+        # -------------------------------------------------
         remaining_per_of = {of.id: 0.0 for of in self.ofs}
 
-        product_produced = defaultdict(float)   # produit -> total produit
-        product_consumption = defaultdict(float)# produit -> total consommé
-        component_balance = defaultdict(float)  # produit -> production - conso
-        production_status = {}                  # of_id -> True/False (prod possible ?)
+        for prod_norm in produced_qty.keys():
+            stock_left = max(0.0, product_stock.get(prod_norm, 0.0))
 
-        EPS = 1e-9
+            # Tous les OFs de ce produit dans le groupe
+            ofs_same_product = [of for of in self.ofs if norm(of.product_id) == prod_norm]
+            ofs_same_product_sorted = sorted(
+                ofs_same_product,
+                key=lambda o: (o.need_date, o.id)
+            )
 
-        for of in sorted_ofs:
-            prod_id = norm(of.product_id)
-            qty = float(of.quantity)
-
-            # 3.1 Besoin en composants selon la nomenclature
-            components_needed = {}
-            for child_id, q_child in bom_lookup.get(prod_id, []):
-                need = q_child * qty
-                if need > EPS:
-                    components_needed[child_id] = components_needed.get(child_id, 0.0) + need
-
-            # 3.2 Vérifier la disponibilité des composants dans le FIFO
-            can_produce = True
-            for comp_id, req in components_needed.items():
-                available = sum(e["remaining"] for e in fifo_supply.get(comp_id, []))
-                if available + EPS < req:
-                    can_produce = False
+            for of in ofs_same_product_sorted:
+                if stock_left <= 0:
                     break
+                assign = min(stock_left, float(of.quantity))
+                remaining_per_of[of.id] = assign
+                stock_left -= assign
 
-            if not can_produce:
-                production_status[of.id] = False
-                of.individual_product_stock = 0.0
-                remaining_per_of[of.id] = 0.0
-                continue
-
-            production_status[of.id] = True
-
-            # 3.3 Consommer les composants en FIFO
-            for comp_id, req in components_needed.items():
-                need_left = req
-                while need_left > EPS and fifo_supply.get(comp_id):
-                    entry = fifo_supply[comp_id][0]
-                    take = min(entry["remaining"], need_left)
-                    entry["remaining"] -= take
-                    need_left -= take
-                    remaining_per_of[entry["of_id"]] -= take
-                    if entry["remaining"] <= EPS:
-                        fifo_supply[comp_id].popleft()
-
-                product_consumption[comp_id] += req
-                component_balance[comp_id] -= req
-
-            # 3.4 Ajouter la production de cet OF dans le FIFO
-            fifo_supply[prod_id].append({"of_id": of.id, "remaining": qty})
-            remaining_per_of[of.id] += qty
-            component_balance[prod_id] += qty
-            product_produced[prod_id] += qty
-
-        # -------------------------
-        # 4. Répartir le stock net par produit sur les OFs (FIFO)
-        # -------------------------
-        for prod_id, total_prod in product_produced.items():
-            total_cons = product_consumption.get(prod_id, 0.0)
-            must_remain = max(0.0, total_prod - total_cons)
-            ofs_of_prod = [o for o in sorted_ofs if norm(o.product_id) == prod_id]
-
-            for o in ofs_of_prod:
-                cur = max(0.0, remaining_per_of[o.id])
-                if must_remain <= 0:
-                    remaining_per_of[o.id] = 0.0
-                else:
-                    take = min(cur, must_remain)
-                    remaining_per_of[o.id] = take
-                    must_remain -= take
-
-        # -------------------------
-        # 5. Remplir les champs de sortie
-        # -------------------------
+        # Mise à jour des champs OF + synthèse groupe
         for of in self.ofs:
-            if not production_status.get(of.id, False):
-                of.individual_product_stock = 0.0
-            else:
-                rem = max(0.0, remaining_per_of.get(of.id, 0.0))
-                rem = min(rem, of.quantity)
-                of.individual_product_stock = rem
+            of.individual_product_stock = max(0.0, remaining_per_of.get(of.id, 0.0))
 
-        # Stocks et conso au niveau groupe
         self.product_consumption = dict(product_consumption)
         self.individual_product_stocks = {
-            pid: sum(max(0.0, remaining_per_of[o.id]) for o in self.ofs if norm(o.product_id) == pid)
-            for pid in {norm(o.product_id) for o in self.ofs}
+            pid: sum(
+                of.individual_product_stock
+                for of in self.ofs
+                if norm(of.product_id) == pid
+            )
+            for pid in {norm(of.product_id) for of in self.ofs}
         }
-        # component_balance = production - consommation par produit
-        self.component_stocks = dict(component_balance)
+        # component_stocks = stock net par produit (production - consommation totale)
+        self.component_stocks = dict(product_stock)
 
 
 class Post:
@@ -641,6 +679,15 @@ def connected_component_nodes(G, start):
 
 
 def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
+    """
+    Regroupement adapté :
+      - On commence par les produits ayant le BOM level le PLUS ÉLEVÉ
+        (premiers composants / plus profonds dans la nomenclature).
+      - On ne crée un groupe que si, dans les candidats, il existe au moins
+        une relation parent–enfant (ParentProductID -> ChildProductID) entre
+        deux produits présents dans le groupe.
+      - Les OF sans relation parent–enfant restent non affectés (OFs Non Affectés).
+    """
     group_counter = 1
     groups = []
     skipped = set()
@@ -648,128 +695,108 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
     def norm(x):
         return ''.join(str(x or '').split()).upper()
 
-    # Infos produits à partir des OFs
-    product_info = {}
-    for of in all_ofs:
-        pid = norm(of.product_id)
-        info = product_info.setdefault(pid, {"has_premix": False, "types": set()})
-        if "PREMIX" in (of.designation or "").upper():
-            info["has_premix"] = True
-        info["types"].add(of.product_type)
+    # Graphe produit <-> composant (non orienté) pour trouver la famille BOM
+    bom_graph = build_bom_graph(bom_data)
 
-    parents_of = defaultdict(set)
-    children_of = defaultdict(set)
-    level_by_product = {}
+    # -----------------------------
+    # 1. Calcul du niveau BOM par produit (ChildBOMLevel / ParentBOMLevel + fallback OF.bom_level)
+    # -----------------------------
+    product_level = {}
 
     for b in bom_data:
         p = norm(b.parent_product_id)
         c = norm(b.child_product_id)
-        if p and c:
-            children_of[p].add(c)
-            parents_of[c].add(p)
 
-        if c:
+        # niveau enfant
+        try:
+            c_lvl = int(getattr(b, "child_bom_level", 0) or 0)
+        except Exception:
+            c_lvl = 0
+
+        # niveau parent (optionnel)
+        try:
+            p_lvl = int(getattr(b, "parent_bom_level", 0) or 0)
+        except Exception:
+            p_lvl = 0
+
+        if c and c_lvl > 0:
+            # plus le niveau est élevé, plus le composant est "profond"
+            product_level[c] = c_lvl if c not in product_level else max(product_level[c], c_lvl)
+        if p and p_lvl > 0:
+            product_level[p] = p_lvl if p not in product_level else max(product_level[p], p_lvl)
+
+    # fallback : si certains produits n'ont pas de niveau dans la nomenclature,
+    # on utilise le bom_level des OFs (colonne CAT du fichier besoins).
+    for of in all_ofs:
+        pid = norm(of.product_id)
+        if pid not in product_level:
             try:
-                lvl = int(getattr(b, "child_bom_level", 0))
+                lvl = int(getattr(of, "bom_level", 0) or 0)
             except Exception:
                 lvl = 0
-            if lvl:
-                level_by_product[c] = min(level_by_product.get(c, lvl), lvl)
+            product_level[pid] = lvl
 
-    # SF1 = premix
-    def is_sf1(pid_norm: str) -> bool:
-        lvl = level_by_product.get(pid_norm)
-        if lvl == 1:
-            return True
-        info = product_info.get(pid_norm, {})
-        if info.get("has_premix"):
-            return True
-        return False
+    # 1bis – stocker le niveau BOM effectif sur chaque OF
+    for of in all_ofs:
+        pid = norm(of.product_id)
+        lvl = product_level.get(pid, getattr(of, "bom_level", 0) or 0)
+        try:
+            of.effective_bom_level = int(lvl)
+        except Exception:
+            of.effective_bom_level = 0
 
-    # SF2 = SF classique
-    def is_sf2(pid_norm: str) -> bool:
-        lvl = level_by_product.get(pid_norm)
-        if lvl == 2:
-            return True
-        info = product_info.get(pid_norm, {})
-        types = info.get("types", set())
-        if "SF" in types and not info.get("has_premix"):
-            return True
-        return False
+    def get_level(of):
+        try:
+            return int(
+                getattr(of, "effective_bom_level", None)
+                if getattr(of, "effective_bom_level", None) is not None
+                else getattr(of, "bom_level", 0) or 0
+            )
+        except Exception:
+            return 0
 
-    bom_graph = build_bom_graph(bom_data)
-
-    def has_path_parent_to_target(parent_pid_norm: str, target_pid_norm: str) -> bool:
-        if parent_pid_norm == target_pid_norm:
-            return True
-        seen = set()
-        dq = deque([parent_pid_norm])
-        while dq:
-            u = dq.popleft()
-            if u in seen:
-                continue
-            seen.add(u)
-            for v in children_of.get(u, ()):
-                if v == target_pid_norm:
-                    return True
-                if v not in seen:
-                    dq.append(v)
-        return False
-
-    def first_unassigned_sf1_or_sf2():
-        best = None
-        best_dt = None
-        best_kind = None
-        # SF1 d'abord
+    # -----------------------------
+    # 2. Choix de l'ancre : OF non affecté ayant le niveau BOM le plus ÉLEVÉ
+    # -----------------------------
+    def first_unassigned_highest_level():
+        best_of = None
+        best_level = None
+        best_date = None
         for of in all_ofs:
             if of.id in skipped:
                 continue
-            if (
-                of.assigned_group_id is None
-                and of.product_id.startswith("SF")
-                and is_sf1(norm(of.product_id))
-            ):
-                if best is None or of.need_date < best_dt:
-                    best, best_dt, best_kind = of, of.need_date, "SF1"
-        if best:
-            return best_kind, best
-        # sinon SF2
-        for of in all_ofs:
-            if of.id in skipped:
+            if of.assigned_group_id is not None:
                 continue
-            if (
-                of.assigned_group_id is None
-                and of.product_id.startswith("SF")
-                and is_sf2(norm(of.product_id))
+            lvl = get_level(of)
+            if best_of is None or lvl > best_level or (
+                lvl == best_level and of.need_date < best_date
             ):
-                if best is None or of.need_date < best_dt:
-                    best, best_dt, best_kind = of, of.need_date, "SF2"
-        return best_kind, best
+                best_of = of
+                best_level = lvl
+                best_date = of.need_date
+        return best_of
 
-    # combos possibles
-    def combo_ok(has1, has2, haspf):
-        if has1 and has2 and haspf:
-            return True
-        if has1 and has2:
-            return True
-        if has2 and haspf:
-            return True
-        if has1 and haspf:
-            return True
-        return False
-
+    # -----------------------------
+    # 3. Boucle principale de regroupement
+    # -----------------------------
     while True:
-        anchor_kind, anchor_of = first_unassigned_sf1_or_sf2()
+        anchor_of = first_unassigned_highest_level()
         if anchor_of is None:
-            break
+            break  # plus d'OF à traiter
 
         anchor_pid_norm = norm(anchor_of.product_id)
-        family = connected_component_nodes(bom_graph, anchor_of.product_id)
 
+        # Famille de produits connectés à l'ancre dans la nomenclature
+        family = connected_component_nodes(bom_graph, anchor_of.product_id)
+        if not family:
+            family = {anchor_pid_norm}
+
+        # Fenêtre temporelle [date besoin ancre, +H semaines]
         window_start_date = anchor_of.need_date
         window_end_date = window_start_date + timedelta(weeks=horizon_H_weeks_param) - timedelta(days=1)
 
-        candidates = [
+        # Candidats bruts = OF non encore affectés, même famille BOM, dans la fenêtre
+        raw_candidates = [
             of
             for of in all_ofs
             if (
@@ -779,61 +806,59 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
             )
         ]
 
-        sf1_list, sf2_list, pf_list = [], [], []
-        for ofx in candidates:
-            pidn = norm(ofx.product_id)
-            if ofx.product_id.startswith("PF"):
-                if has_path_parent_to_target(pidn, anchor_pid_norm):
-                    pf_list.append(ofx)
-            elif ofx.product_id.startswith("SF"):
-                if is_sf1(pidn):
-                    sf1_list.append(ofx)
-                if is_sf2(pidn):
-                    sf2_list.append(ofx)
+        # -----------------------------------
+        # Filtrage : on ne garde que les OF dont le produit
+        # a au moins une relation parent–enfant avec un autre produit
+        # parmi les candidats (d'après la nomenclature).
+        # -----------------------------------
+        cand_pids_raw = {norm(of.product_id) for of in raw_candidates}
+        related_pids = set()
 
-        has1 = len(sf1_list) > 0
-        has2 = len(sf2_list) > 0
-        haspf = len(pf_list) > 0
+        for b in bom_data:
+            p = norm(b.parent_product_id)
+            c = norm(b.child_product_id)
+            # Parent et enfant présents tous les deux dans les candidats ?
+            if p in cand_pids_raw and c in cand_pids_raw:
+                related_pids.add(p)
+                related_pids.add(c)
 
-        if not combo_ok(has1, has2, haspf):
+        # On garde uniquement les OF dont le produit est dans related_pids
+        candidates = [
+            of for of in raw_candidates
+            if norm(of.product_id) in related_pids
+        ]
+
+        # Si aucun couple parent–enfant, ou un seul OF, on ne crée pas de groupe
+        if len(candidates) <= 1:
             skipped.add(anchor_of.id)
             continue
 
-        initial_ps_as_stock = (anchor_kind == "SF1")
+        # Si l'ancre ne fait pas partie des produits reliés (parent–enfant),
+        # on ne crée pas de groupe avec elle comme ancre.
+        if anchor_of not in candidates:
+            skipped.add(anchor_of.id)
+            continue
+
+        # Création du groupe : l'ancre sert de "PS principal" (logique interne du modèle)
         current_group = Group(
             id=f"GRP{group_counter}",
             ps_product_id=anchor_of.product_id,
             initial_ps_of=anchor_of,
             window_start_date=window_start_date,
             window_end_date=window_end_date,
-            initial_ps_as_stock=initial_ps_as_stock
+            initial_ps_as_stock=False,  # le stock sera recalculé par calculate_consumption
         )
 
-        def add_if_in_candidates(list_of):
-            for ofx in sorted(list_of, key=lambda x: (x.need_date, -x.bom_level, x.product_id)):
-                if ofx.id == anchor_of.id:
-                    continue
-                pidn = norm(ofx.product_id)
-                if ofx.product_id.startswith("PF"):
-                    if has_path_parent_to_target(pidn, anchor_pid_norm):
-                        current_group.add_of(ofx, ps_quantity_change=0)
-                elif ofx.product_id.startswith("SF"):
-                    if is_sf1(pidn):
-                        current_group.add_of(ofx, ps_quantity_change=ofx.quantity)
-                    elif is_sf2(pidn):
-                        current_group.add_of(ofx, ps_quantity_change=0)
-                        current_group.component_stocks[ofx.product_id] = (
-                            current_group.component_stocks.get(ofx.product_id, 0.0)
-                            + ofx.quantity
-                        )
-                    else:
-                        current_group.add_of(ofx, ps_quantity_change=0)
+        # On ajoute les autres OF du groupe : on commence par les BOM levels les plus élevés
+        def sort_key(of):
+            return (-get_level(of), of.need_date, of.product_id)
 
-        add_if_in_candidates(sf1_list)
-        add_if_in_candidates(sf2_list)
-        add_if_in_candidates(pf_list)
+        for ofx in sorted(candidates, key=sort_key):
+            if ofx.id == anchor_of.id:
+                continue  # déjà ajouté par le constructeur du groupe
+            current_group.add_of(ofx, ps_quantity_change=0)
 
-        # nouveau calcul de consommation / stock (FIFO + nomenclature)
+        # Calcul des consommations / stocks à l’intérieur du groupe (nouvelle logique par niveaux)
         current_group.calculate_consumption(bom_data)
 
         groups.append(current_group)
@@ -1072,11 +1097,23 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
         return name.startswith("PREMIX")
 
     def display_class(of_obj):
+        # tu peux garder ça si tu veux encore distinguer PF / SF / PREMIX
         if is_premix(of_obj):
             return 2
         if of_obj.product_type == "PF":
             return 0
         return 1
+
+    def get_bom_level(of_obj):
+        """Niveau BOM effectif pour le tri (décroissant)."""
+        try:
+            return int(
+                getattr(of_obj, "effective_bom_level", None)
+                if getattr(of_obj, "effective_bom_level", None) is not None
+                else getattr(of_obj, "bom_level", 0) or 0
+            )
+        except Exception:
+            return 0
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter="\t")
@@ -1090,6 +1127,9 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             except Exception:
                 return 0
 
+        # -----------------------------
+        # Écriture des OF par groupe
+        # -----------------------------
         for group in sorted(grouped_list_data, key=extract_group_number):
             f.write(f"\n# Group ID: {group.id}\n")
             f.write(f"#   Produit PS Principal (ancre): {group.ps_product_id}\n")
@@ -1108,9 +1148,13 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                 f.write("#   Stock PS: Non calculé / Ancre composant\n")
 
             ofs_in_group = [of for of in all_ofs_scheduled if of.assigned_group_id == group.id]
+
+            # Ordre DÉCROISSANT sur le niveau BOM :
+            #   niveau le plus élevé en haut, plus faible en bas
             ofs_in_group_sorted = sorted(
                 ofs_in_group,
-                key=lambda x: (display_class(x), -x.bom_level, x.need_date),
+                key=lambda x: (get_bom_level(x), x.need_date, x.product_id),
+                
             )
 
             for of_obj in ofs_in_group_sorted:
@@ -1167,9 +1211,18 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                 )
                 processed_of_ids_in_groups.add(of_obj.id)
 
+        # -----------------------------
+        # OFs Non Affectés
+        # -----------------------------
         f.write("\n# OFs Non Affectés:\n")
         unassigned = [of for of in all_ofs_scheduled if of.id not in processed_of_ids_in_groups]
-        unassigned_sorted = sorted(unassigned, key=lambda x: (display_class(x), x.id))
+
+        # Même ordre décroissant pour les non affectés
+        unassigned_sorted = sorted(
+            unassigned,
+            key=lambda x: (get_bom_level(x), x.need_date, x.id),
+            
+        )
 
         for of_obj in unassigned_sorted:
             desc_parts = of_obj.designation.split()
@@ -1340,12 +1393,16 @@ def load_ofs_from_file(filepath):
 def load_bom_from_file(filepath):
     print(f"Loading BOM from {filepath}")
     bom_entries = []
+
+    # Colonnes obligatoires
     required_cols = [
         "ParentProductID",
         "ChildProductID",
         "QuantityChildPerParent",
         "ChildBOMLevel",
     ]
+
+    # + alias, avec ParentBOMLevel en option
     aliases = {
         "ParentProductID": ["parentproductid", "parent", "parent id", "id parent"],
         "ChildProductID": ["childproductid", "child", "child id", "id child"],
@@ -1356,6 +1413,8 @@ def load_bom_from_file(filepath):
             "qte/parent",
         ],
         "ChildBOMLevel": ["childbomlevel", "child level", "niveau enfant", "level"],
+        # Nouveau : ParentBOMLevel optionnel
+        "ParentBOMLevel": ["parentbomlevel", "parent level", "niveau parent"],
     }
 
     def _alias_map(fieldnames):
@@ -1392,17 +1451,25 @@ def load_bom_from_file(filepath):
             f.close()
         return []
 
+    # Détection optionnelle de la colonne ParentBOMLevel
+    lower_fields = {c.strip().lower(): c.strip() for c in reader.fieldnames}
+    parent_level_col = None
+    for k in ["ParentBOMLevel"] + aliases.get("ParentBOMLevel", []):
+        if k.lower() in lower_fields:
+            parent_level_col = lower_fields[k.lower()]
+            break
+
     try:
         for row_num, row in enumerate(reader, 1):
             try:
+                parent_lvl_val = row[parent_level_col] if parent_level_col else None
+
                 entry = BOMEntry(
                     parent_product_id=row[map_cols["ParentProductID"]],
                     child_product_id=row[map_cols["ChildProductID"]],
-
-
                     quantity_child_per_parent=row[map_cols["QuantityChildPerParent"]],
-
                     child_bom_level=row[map_cols["ChildBOMLevel"]],
+                    parent_bom_level=parent_lvl_val,
                 )
                 bom_entries.append(entry)
             except Exception as e:
@@ -1565,13 +1632,19 @@ def load_compact_input_file(filepath):
                             )
                         )
                     elif tag == "BOM":
-                        _, parent, child, qty_per_parent, child_level = parts[:5]
+                        # Format compact : BOM parent child qty_per_parent child_level [parent_level? -> à ajouter si tu veux]
+                        if len(parts) >= 6:
+                            _, parent, child, qty_per_parent, child_level, parent_level = parts[:6]
+                        else:
+                            _, parent, child, qty_per_parent, child_level = parts[:5]
+                            parent_level = None
                         bom_list.append(
                             BOMEntry(
                                 parent_product_id=parent,
                                 child_product_id=child,
                                 quantity_child_per_parent=qty_per_parent,
                                 child_bom_level=child_level,
+                                parent_bom_level=parent_level,
                             )
                         )
             return ofs_list, bom_list
