@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, time, date 
+from datetime import datetime, timedelta, time, date
 from collections import defaultdict, deque
 import calendar
 import csv
@@ -10,6 +10,21 @@ HORIZON_H_WEEKS = 10
 POST_DEFAULT_CAPACITY_HOURS_WEEK = 35
 ADVANCE_RETREAT_WEEKS = 3
 ENCODING_CANDIDATES = ("utf-8-sig", "cp1252", "latin-1", "utf-8")
+
+
+def norm_code(x: str) -> str:
+    """
+    Normalise un code (OF, produit, poste, etc.) :
+    - None -> ""
+    - supprime les espaces
+    - met en MAJUSCULES
+    - enlève BOM éventuel
+    """
+    if x is None:
+        return ""
+    s = str(x).replace("\ufeff", "")
+    s = "".join(s.split())
+    return s.upper()
 
 
 def detect_csv_delimiter(filepath, fallback=',', sample_size=65536):
@@ -238,24 +253,13 @@ class Group:
         of_to_add.assigned_group_id = self.id
         of_to_add.status = "ASSIGNED"
 
+    
     def calculate_consumption(self, bom_data):
         """
-        Nouveau calcul de stock adapté à la logique "on commence par le plus haut niveau BOM".
-
-        Pour chaque groupe :
-          1. On calcule la quantité produite par produit (somme des OFs du groupe).
-          2. On initialise le stock de chaque produit avec sa quantité produite.
-          3. Pour chaque relation de nomenclature (parent -> composant) :
-                consommation_enfant = qty_produite_parent * qty_child_per_parent
-             On soustrait cette consommation du stock du composant.
-          4. On distribue le stock net par produit sur les OFs correspondants (FIFO sur la date besoin).
-
-        Remplit :
-          - self.component_stocks : stock net par produit (production - consommation)
-          - self.individual_product_stocks : stock net par produit dans le groupe
-          - of.individual_product_stock : stock affecté à chaque OF
+        Calcul de stock adapté à la logique "on commence par le plus haut niveau BOM",
+        en respectant la nomenclature multi-niveaux et en incluant aussi les PF
+        (niveau 0) dans le stock produit.
         """
-
         from collections import defaultdict
 
         def norm(x: str) -> str:
@@ -265,17 +269,17 @@ class Group:
             s = ''.join(s.split())
             return s.upper()
 
+        # Si pas d'OF dans le groupe -> tout à zéro
         if not self.ofs:
             self.component_stocks = {}
             self.individual_product_stocks = {}
+            for of in getattr(self, "ofs", []):
+                of.individual_product_stock = 0.0
             return
 
-        # -------------------------------------------------
-        # 1. Niveaux BOM par produit (ChildBOMLevel / ParentBOMLevel + fallback OF.bom_level)
-        # -------------------------------------------------
+        # 1) Niveaux BOM par produit (ChildBOMLevel / ParentBOMLevel)
         product_level = {}
 
-        # Niveaux provenant de la nomenclature
         for bom in bom_data:
             p = norm(bom.parent_product_id)
             c = norm(bom.child_product_id)
@@ -290,30 +294,13 @@ class Group:
             except Exception:
                 p_lvl = 0
 
+            # On ne stocke que les niveaux strictement positifs ici
             if c and c_lvl > 0:
-                # plus le niveau est élevé, plus le composant est "profond"
                 product_level[c] = c_lvl if c not in product_level else max(product_level[c], c_lvl)
             if p and p_lvl > 0:
                 product_level[p] = p_lvl if p not in product_level else max(product_level[p], p_lvl)
 
-        # Produits présents dans ce groupe
-        group_products = {norm(of.product_id) for of in self.ofs}
-
-        # Fallback : si certains produits du groupe n'ont pas de niveau dans le BOM,
-        # on utilise leur bom_level issu du fichier besoins (colonne CAT).
-        for pid in group_products:
-            if pid not in product_level:
-                # On prend n'importe quel OF de ce produit
-                of0 = next(of for of in self.ofs if norm(of.product_id) == pid)
-                try:
-                    lvl = int(getattr(of0, "bom_level", 0) or 0)
-                except Exception:
-                    lvl = 0
-                product_level[pid] = lvl
-
-        # -------------------------------------------------
-        # 2. Quantités produites par produit (somme des OFs de ce groupe)
-        # -------------------------------------------------
+        # 2) Quantités produites par produit (somme des OFs de ce groupe)
         produced_qty = defaultdict(float)
         for of in self.ofs:
             pid = norm(of.product_id)
@@ -326,14 +313,19 @@ class Group:
                 of.individual_product_stock = 0.0
             return
 
+        # 🔴 CORRECTION IMPORTANTE :
+        # Tous les produits qui ont des OF dans le groupe doivent avoir un niveau,
+        # même si on ne les a pas trouvés dans la nomenclature -> niveau 0 (PF typiquement)
+        for pid in produced_qty.keys():
+            if pid not in product_level:
+                product_level[pid] = 0  # PF / produits sans niveau explicite
+
         # Liste des niveaux présents dans le groupe
         levels_in_group = {product_level.get(pid, 0) for pid in produced_qty.keys()}
         max_level = max(levels_in_group) if levels_in_group else 0
         min_level = min(levels_in_group) if levels_in_group else 0
 
-        # -------------------------------------------------
-        # 3. Construction du BOM par parent (dans le contexte du groupe)
-        # -------------------------------------------------
+        # 3) Construction du BOM par parent (dans le contexte du groupe)
         bom_by_parent = defaultdict(list)
         for bom in bom_data:
             p = norm(bom.parent_product_id)
@@ -344,27 +336,23 @@ class Group:
             if p in produced_qty:
                 bom_by_parent[p].append((c, float(bom.quantity_child_per_parent)))
 
-        # -------------------------------------------------
-        # 4. Calcul du stock net par produit (niveau le plus élevé -> niveau le plus faible)
-        # -------------------------------------------------
+        # 4) Calcul du stock net par produit (niveau le plus élevé -> le plus bas)
         product_stock = {pid: 0.0 for pid in produced_qty.keys()}
         product_consumption = defaultdict(float)
 
-        # On parcourt les niveaux du plus "profond" (composant) vers le plus "haut" (PF)
-        # pour respecter l'idée "on produit d'abord les niveaux les plus élevés".
+        # On parcourt les niveaux du plus "profond" (composants) vers le plus "haut" (PF)
         for lvl in range(max_level, min_level - 1, -1):
-            # Tous les produits à ce niveau
             for pid, plvl in product_level.items():
                 if plvl != lvl:
                     continue
                 if pid not in produced_qty:
-                    continue  # pas d'OF pour ce produit dans ce groupe
+                    continue
 
                 qty_prod = produced_qty[pid]
                 if qty_prod <= 0:
                     continue
 
-                # On "produit" ce niveau : le stock de ce produit augmente de sa quantité produite
+                # On "produit" ce niveau : le stock de ce produit augmente
                 product_stock[pid] = product_stock.get(pid, 0.0) + qty_prod
 
                 # Puis on consomme ses composants selon la nomenclature
@@ -376,9 +364,7 @@ class Group:
                     product_stock[child_id] = product_stock.get(child_id, 0.0) - need
                     product_consumption[child_id] += need
 
-        # -------------------------------------------------
-        # 5. Répartition du stock net par produit sur les OFs (FIFO sur date besoin)
-        # -------------------------------------------------
+        # 5) Répartition du stock net par produit sur les OFs (FIFO sur date besoin)
         remaining_per_of = {of.id: 0.0 for of in self.ofs}
 
         for prod_norm in produced_qty.keys():
@@ -414,7 +400,7 @@ class Group:
         # component_stocks = stock net par produit (production - consommation totale)
         self.component_stocks = dict(product_stock)
 
-
+    
 class Post:
     def __init__(
         self,
@@ -682,10 +668,8 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
     """
     Regroupement adapté :
       - On commence par les produits ayant le BOM level le PLUS ÉLEVÉ
-        (premiers composants / plus profonds dans la nomenclature).
       - On ne crée un groupe que si, dans les candidats, il existe au moins
-        une relation parent–enfant (ParentProductID -> ChildProductID) entre
-        deux produits présents dans le groupe.
+        une relation parent–enfant
       - Les OF sans relation parent–enfant restent non affectés (OFs Non Affectés).
     """
     group_counter = 1
@@ -695,12 +679,10 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
     def norm(x):
         return ''.join(str(x or '').split()).upper()
 
-    # Graphe produit <-> composant (non orienté) pour trouver la famille BOM
+    # Graphe pour trouver la famille BOM
     bom_graph = build_bom_graph(bom_data)
 
-    # -----------------------------
     # 1. Calcul du niveau BOM par produit (ChildBOMLevel / ParentBOMLevel + fallback OF.bom_level)
-    # -----------------------------
     product_level = {}
 
     for b in bom_data:
@@ -720,21 +702,9 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
             p_lvl = 0
 
         if c and c_lvl > 0:
-            # plus le niveau est élevé, plus le composant est "profond"
             product_level[c] = c_lvl if c not in product_level else max(product_level[c], c_lvl)
         if p and p_lvl > 0:
             product_level[p] = p_lvl if p not in product_level else max(product_level[p], p_lvl)
-
-    # fallback : si certains produits n'ont pas de niveau dans la nomenclature,
-    # on utilise le bom_level des OFs (colonne CAT du fichier besoins).
-    for of in all_ofs:
-        pid = norm(of.product_id)
-        if pid not in product_level:
-            try:
-                lvl = int(getattr(of, "bom_level", 0) or 0)
-            except Exception:
-                lvl = 0
-            product_level[pid] = lvl
 
     # 1bis – stocker le niveau BOM effectif sur chaque OF
     for of in all_ofs:
@@ -755,9 +725,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
         except Exception:
             return 0
 
-    # -----------------------------
     # 2. Choix de l'ancre : OF non affecté ayant le niveau BOM le plus ÉLEVÉ
-    # -----------------------------
     def first_unassigned_highest_level():
         best_of = None
         best_level = None
@@ -776,9 +744,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
                 best_date = of.need_date
         return best_of
 
-    # -----------------------------
     # 3. Boucle principale de regroupement
-    # -----------------------------
     while True:
         anchor_of = first_unassigned_highest_level()
         if anchor_of is None:
@@ -806,18 +772,13 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
             )
         ]
 
-        # -----------------------------------
-        # Filtrage : on ne garde que les OF dont le produit
-        # a au moins une relation parent–enfant avec un autre produit
-        # parmi les candidats (d'après la nomenclature).
-        # -----------------------------------
+        # Filtrage
         cand_pids_raw = {norm(of.product_id) for of in raw_candidates}
         related_pids = set()
 
         for b in bom_data:
             p = norm(b.parent_product_id)
             c = norm(b.child_product_id)
-            # Parent et enfant présents tous les deux dans les candidats ?
             if p in cand_pids_raw and c in cand_pids_raw:
                 related_pids.add(p)
                 related_pids.add(c)
@@ -846,7 +807,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
             initial_ps_of=anchor_of,
             window_start_date=window_start_date,
             window_end_date=window_end_date,
-            initial_ps_as_stock=False,  # le stock sera recalculé par calculate_consumption
+            initial_ps_as_stock=False,
         )
 
         # On ajoute les autres OF du groupe : on commence par les BOM levels les plus élevés
@@ -855,10 +816,10 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
 
         for ofx in sorted(candidates, key=sort_key):
             if ofx.id == anchor_of.id:
-                continue  # déjà ajouté par le constructeur du groupe
+                continue
             current_group.add_of(ofx, ps_quantity_change=0)
 
-        # Calcul des consommations / stocks à l’intérieur du groupe (nouvelle logique par niveaux)
+        # Calcul des stocks à l’intérieur du groupe
         current_group.calculate_consumption(bom_data)
 
         groups.append(current_group)
@@ -869,6 +830,10 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
 
 def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map, operations_map, params):
     import json
+    from datetime import datetime, timedelta, time
+    import os
+    from collections import defaultdict as _dd
+    from math import isclose
 
     def dt_to_str(dt):
         return dt.strftime("%Y-%m-%d %H:%M") if dt else None
@@ -891,7 +856,101 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
     smoothing_items = []
     scheduled_ofs = []
 
-    def find_first_op_two_phase(post_obj, need_dt, op_hours, group_start_date):
+    # ---------- BOM level helper ----------
+    def get_level(of):
+        try:
+            lvl = getattr(of, "effective_bom_level", None)
+            if lvl is None:
+                lvl = getattr(of, "bom_level", 0) or 0
+            return int(lvl)
+        except Exception:
+            return 0
+
+    # ---------- normalisation locale ----------
+    def _norm_code_local(x):
+        return "".join(str(x or "").replace("\ufeff", "").split()).upper()
+
+    # ---------- parent -> enfants dans la nomenclature ----------
+    parent_to_children = _dd(set)
+    for b in bom_data:
+        p_raw = getattr(b, "parent_product_id", "") or ""
+        c_raw = getattr(b, "child_product_id", "") or ""
+        p = _norm_code_local(p_raw)
+        c = _norm_code_local(c_raw)
+        if p and c:
+            parent_to_children[p].add(c)
+
+    # ---------- mapping canonique norm -> raw (pour BOM / stock) ----------
+    canonical_norm_to_raw = {}
+    for b in bom_data:
+        p_raw = getattr(b, "parent_product_id", "") or ""
+        c_raw = getattr(b, "child_product_id", "") or ""
+        p_norm = _norm_code_local(p_raw)
+        c_norm = _norm_code_local(c_raw)
+        if p_norm and p_norm not in canonical_norm_to_raw:
+            canonical_norm_to_raw[p_norm] = p_raw
+        if c_norm and c_norm not in canonical_norm_to_raw:
+            canonical_norm_to_raw[c_norm] = c_raw
+
+    # ---------- ordre des OF par chaîne BOM (du plus haut niveau vers le plus bas) ----------
+    def order_group_ofs_by_bom_chain(group_ofs):
+        """
+        Pour un groupe donné :
+         - on part des produits avec BOM level le plus élevé,
+         - on planifie tous leurs OF,
+         - puis on descend récursivement vers les enfants BOM,
+         - pour finir la chaîne du groupe du niveau le plus haut au plus bas.
+        """
+        product_to_ofs = _dd(list)
+        for of in group_ofs:
+            pn = _norm_code_local(of.product_id)
+            product_to_ofs[pn].append(of)
+
+        # OF d'un même produit triés par date besoin + id
+        for lst in product_to_ofs.values():
+            lst.sort(key=lambda o: (o.need_date, o.id))
+
+        # niveau BOM par produit (max des niveaux des OF de ce produit)
+        product_level = {}
+        for pn, ofs in product_to_ofs.items():
+            levels = [get_level(of) for of in ofs]
+            product_level[pn] = max(levels) if levels else 0
+
+        # produits triés du niveau BOM le plus élevé au plus faible
+        products_sorted = sorted(
+            product_to_ofs.keys(),
+            key=lambda pn: -product_level.get(pn, 0)
+        )
+
+        visited_of_ids = set()
+        ordered = []
+
+        def dfs_product(pn):
+            if pn not in product_to_ofs:
+                return
+
+            # 1) tous les OF de ce produit
+            for of in product_to_ofs[pn]:
+                if of.id not in visited_of_ids:
+                    ordered.append(of)
+                    visited_of_ids.add(of.id)
+
+            # 2) descente sur les enfants BOM
+            for child_pn in parent_to_children.get(pn, set()):
+                dfs_product(child_pn)
+
+        for pn in products_sorted:
+            dfs_product(pn)
+
+        # sécurité : OF non ajoutés (cas bizarres)
+        for of in group_ofs:
+            if of.id not in visited_of_ids:
+                ordered.append(of)
+
+        return ordered
+
+    # ---------- 1er créneau d'OP (2 phases) avec verrou groupe/poste ----------
+    def find_first_op_two_phase(post_obj, need_dt, op_hours, group_start_date, min_group_start=None):
         ADV_WEEKS = 3
         adv_td_local = timedelta(weeks=ADV_WEEKS)
 
@@ -903,14 +962,27 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
         need_d = need_dt.date()
         hi_d = (need_dt + adv_td_local).date()
 
+        # on ne doit pas commencer avant min_group_start (si déjà utilisé par ce groupe)
+        if min_group_start is not None and min_group_start > g_start:
+            g_start = min_group_start
+
+        # Phase A : avant besoin
         a_start = max(g_start, need_dt - adv_td_local)
+        if min_group_start is not None and min_group_start > a_start:
+            a_start = min_group_start
         a_start = post_obj._get_next_working_datetime(a_start)
+
         s, e = post_obj.find_available_slot(a_start, op_hours, of_id_to_ignore=None)
         if s and e and s.date() <= need_d:
             return s, e
 
+        # Phase B : après besoin
         next_day_midnight = datetime.combine(need_d + timedelta(days=1), time.min)
-        b_start = post_obj._get_next_working_datetime(max(next_day_midnight, g_start))
+        b_start = max(next_day_midnight, g_start)
+        if min_group_start is not None and min_group_start > b_start:
+            b_start = min_group_start
+        b_start = post_obj._get_next_working_datetime(b_start)
+
         if b_start.date() <= hi_d:
             s, e = post_obj.find_available_slot(b_start, op_hours, of_id_to_ignore=None)
             if s and e and (need_d < s.date() <= hi_d):
@@ -918,18 +990,113 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
 
         return None, None
 
+    # =========================
+    #  BOUCLE GROUPE PAR GROUPE
+    # =========================
     for group in sorted(groups, key=lambda g: g.time_window_start):
-        ofs_sorted = sorted(
-            [of for of in all_ofs_with_groups if of.assigned_group_id == group.id],
-            key=lambda x: (-x.bom_level, x.need_date)
-        )
+        base_need_dt = group.time_window_start
 
+        # OFs de ce groupe uniquement
+        group_ofs = [of for of in all_ofs_with_groups if of.assigned_group_id == group.id]
+
+        # ordre de planification : par chaîne BOM
+        ofs_sorted = order_group_ofs_by_bom_chain(group_ofs)
+
+        # produits présents dans ce groupe (normalisés)
+        group_products_norm = {_norm_code_local(of.product_id) for of in group_ofs}
+
+        # stock dynamique disponible par produit (dans ce groupe)
+        available_stock = _dd(float)
+
+        # mémo pour le calcul de quantité composant/parent (multi-niveaux)
+        bom_qty_memo = {}
+
+        # verrou "groupe/poste" : dernière fin d'OP de CE groupe sur CE poste
+        group_post_last_end = {}
+
+        # ----- helpers stock -----
+        def has_enough_component_stock(of_obj):
+            """
+            Vérifie que, pour produire cet OF, on dispose du stock nécessaire
+            des composants internes au groupe, d'après la nomenclature.
+            On ignore les composants qui ne sont pas produits par des OF du groupe
+            (on les considère comme achetés / externes).
+            """
+            p_norm = _norm_code_local(of_obj.product_id)
+            qty = float(getattr(of_obj, "quantity", 0) or 0)
+            if qty <= 0:
+                return True, ""
+
+            # id "brut" à utiliser avec la nomenclature
+            p_raw = canonical_norm_to_raw.get(p_norm, of_obj.product_id)
+
+            for comp_norm in group_products_norm:
+                if comp_norm == p_norm:
+                    continue
+                comp_raw = canonical_norm_to_raw.get(comp_norm)
+                if not comp_raw:
+                    # ce composant n'apparaît pas en nomenclature -> on ignore
+                    continue
+
+                coef = find_qty_of_component_in_product(p_raw, comp_raw, bom_data, bom_qty_memo)
+                if coef <= 0:
+                    continue
+
+                needed = qty * coef
+                current = available_stock[comp_norm]
+                # petite tolérance numérique
+                if current + 1e-9 < needed:
+                    reason = (
+                        f"Stock insuffisant pour composant {comp_raw}: "
+                        f"besoin={needed}, dispo={current}"
+                    )
+                    return False, reason
+
+            return True, ""
+
+        def apply_stock_effect(of_obj):
+            """
+            Met à jour le stock dynamique après la production de cet OF :
+              - ajoute la quantité produite de son produit
+              - consomme les composants internes au groupe selon la nomenclature.
+            """
+            p_norm = _norm_code_local(of_obj.product_id)
+            qty = float(getattr(of_obj, "quantity", 0) or 0)
+            if qty == 0:
+                return
+
+            p_raw = canonical_norm_to_raw.get(p_norm, of_obj.product_id)
+
+            # produit fabriqué
+            available_stock[p_norm] += qty
+
+            # consommation des composants
+            for comp_norm in group_products_norm:
+                if comp_norm == p_norm:
+                    continue
+                comp_raw = canonical_norm_to_raw.get(comp_norm)
+                if not comp_raw:
+                    continue
+
+                coef = find_qty_of_component_in_product(p_raw, comp_raw, bom_data, bom_qty_memo)
+                if coef <= 0:
+                    continue
+
+                needed = qty * coef
+                if not isclose(needed, 0.0, abs_tol=1e-12):
+                    available_stock[comp_norm] -= needed
+
+        # ----------------------
+        #  OF PAR OF DANS LE GROUPE
+        # ----------------------
         for of_to_schedule in ofs_sorted:
-            ops = operations_map.get(of_to_schedule.product_id, []) or operations_map.get(
-                of_to_schedule.product_type, []
-            )
-            if not ops:
-                of_to_schedule.status = "ÉCHOUÉ"
+            need_dt_for_smoothing = base_need_dt
+
+            # ========== 0) Vérifier le stock des composants nécessaires ==========
+            stock_ok, stock_reason = has_enough_component_stock(of_to_schedule)
+            if not stock_ok:
+                status_affiche = "ÉCHOUÉ(stock insuffisant)"
+                of_to_schedule.status = status_affiche
                 of_to_schedule.scheduled_start_date = None
                 of_to_schedule.scheduled_end_date = None
                 smoothing_items.append(
@@ -938,10 +1105,82 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                         "product_id": of_to_schedule.product_id,
                         "designation": of_to_schedule.designation,
                         "group_id": group.id,
-                        "need_date": of_to_schedule.need_date.strftime("%Y-%m-%d"),
+                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
                         "scheduled_start": None,
                         "scheduled_end": None,
-                        "status": "ÉCHOUÉ",
+                        "status": status_affiche,
+                        "retard_jours": 0,
+                        "operations": [],
+                        "debug": stock_reason,
+                    }
+                )
+                scheduled_ofs.append(of_to_schedule)
+                continue
+
+            # ========== 1) Vérifier si les composants sont tous ÉCHOUÉ ==========
+            prod_norm = _norm_code_local(of_to_schedule.product_id)
+            children_norms = parent_to_children.get(prod_norm, set())
+
+            if children_norms:
+                blocked_by_component_failure = False
+                for child_pid_norm in children_norms:
+                    child_ofs = [
+                        ofc for ofc in group_ofs
+                        if _norm_code_local(ofc.product_id) == child_pid_norm
+                    ]
+                    if child_ofs and all(ofc.status.startswith("ÉCHOUÉ") for ofc in child_ofs):
+                        blocked_by_component_failure = True
+                        break
+
+                if blocked_by_component_failure:
+                    status_affiche = "ÉCHOUÉ(stock insuffisant)"
+                    of_to_schedule.status = status_affiche
+                    of_to_schedule.scheduled_start_date = None
+                    of_to_schedule.scheduled_end_date = None
+                    smoothing_items.append(
+                        {
+                            "of_id": of_to_schedule.id,
+                            "product_id": of_to_schedule.product_id,
+                            "designation": of_to_schedule.designation,
+                            "group_id": group.id,
+                            "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
+                            "scheduled_start": None,
+                            "scheduled_end": None,
+                            "status": status_affiche,
+                            "retard_jours": 0,
+                            "operations": [],
+                            "debug": "Blocked because component OFs are all ÉCHOUÉ",
+                        }
+                    )
+                    scheduled_ofs.append(of_to_schedule)
+                    continue
+
+            # ========== 2) Récupérer les opérations pour cet OF ==========
+            key_of = _norm_code_local(of_to_schedule.id)
+            key_prod = prod_norm
+            key_type = _norm_code_local(of_to_schedule.product_type)
+
+            ops = (
+                operations_map.get(key_of, [])
+                or operations_map.get(key_prod, [])
+                or operations_map.get(key_type, [])
+            )
+
+            if not ops:
+                status_affiche = "ÉCHOUÉ(poste indispo)"
+                of_to_schedule.status = status_affiche
+                of_to_schedule.scheduled_start_date = None
+                of_to_schedule.scheduled_end_date = None
+                smoothing_items.append(
+                    {
+                        "of_id": of_to_schedule.id,
+                        "product_id": of_to_schedule.product_id,
+                        "designation": of_to_schedule.designation,
+                        "group_id": group.id,
+                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
+                        "scheduled_start": None,
+                        "scheduled_end": None,
+                        "status": status_affiche,
                         "retard_jours": 0,
                         "operations": [],
                         "debug": "No operations",
@@ -951,6 +1190,8 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 continue
 
             ops = sorted(ops, key=lambda o: o.sequence)
+
+            # nettoyer les anciens créneaux pour cet OF
             for op_def in ops:
                 post = posts_map.get(op_def.post_id)
                 if post:
@@ -961,6 +1202,7 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
             feasible = True
             fail_reason = ""
 
+            # ========== 3) Planification de la chaîne d'opérations ==========
             for i, op_def in enumerate(ops):
                 post = posts_map.get(op_def.post_id)
                 if not post:
@@ -969,12 +1211,23 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                     break
 
                 dur_h = op_def.standard_time_hours
+                group_last_for_post = group_post_last_end.get(post.id)
+
                 if i == 0:
+                    # 1ère opération : fenêtre autour de la date besoin du groupe
                     s_dt, e_dt = find_first_op_two_phase(
-                        post, of_to_schedule.need_date, dur_h, group.time_window_start
+                        post,
+                        need_dt_for_smoothing,
+                        dur_h,
+                        group.time_window_start,
+                        min_group_start=group_last_for_post,
                     )
                 else:
+                    # suivantes : à partir de la fin de la précédente
                     start_search = post._get_next_working_datetime(last_end)
+                    if group_last_for_post is not None and group_last_for_post > start_search:
+                        start_search = post._get_next_working_datetime(group_last_for_post)
+
                     s_dt, e_dt = post.find_available_slot(
                         start_search,
                         dur_h,
@@ -984,6 +1237,8 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 if s_dt and e_dt:
                     op_sched.append((op_def, post, s_dt, e_dt))
                     last_end = e_dt
+                    if group_last_for_post is None or e_dt > group_last_for_post:
+                        group_post_last_end[post.id] = e_dt
                 else:
                     feasible = False
                     fail_reason = (
@@ -993,6 +1248,7 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                     )
                     break
 
+            # ========== 4) Si planification possible ==========
             if feasible and op_sched:
                 for op_def, post, s_dt, e_dt in op_sched:
                     post.book_slot(s_dt, e_dt, of_to_schedule.id + "_" + op_def.operation_name)
@@ -1002,19 +1258,28 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 of_to_schedule.scheduled_start_date = start_dt
                 of_to_schedule.scheduled_end_date = end_dt
 
-                need_d = of_to_schedule.need_date.date()
-                hi_d = (of_to_schedule.need_date + timedelta(weeks=3)).date()
+                need_d = need_dt_for_smoothing.date()
+                hi_d = (need_dt_for_smoothing + adv_td).date()
                 start_d = start_dt.date()
 
                 if start_d <= need_d:
-                    statut = "OUI"
+                    statut_calc = "OUI"
                 elif need_d < start_d <= hi_d:
-                    statut = "NON"
+                    statut_calc = "NON"
                 else:
-                    statut = "ÉCHOUÉ"
+                    statut_calc = "ÉCHOUÉ"   # hors H → mais affiché comme NON
 
-                of_to_schedule.status = statut
-                retard_jours = days_delay_if_late(start_dt, of_to_schedule.need_date)
+                # Règle d'affichage : hors fenêtre H -> NON
+                if statut_calc == "ÉCHOUÉ":
+                    statut_affiche = "NON"
+                else:
+                    statut_affiche = statut_calc
+
+                of_to_schedule.status = statut_affiche
+                retard_jours = days_delay_if_late(start_dt, need_dt_for_smoothing)
+
+                # mise à jour du stock dynamique pour cet OF
+                apply_stock_effect(of_to_schedule)
 
                 smoothing_items.append(
                     {
@@ -1022,10 +1287,10 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                         "product_id": of_to_schedule.product_id,
                         "designation": of_to_schedule.designation,
                         "group_id": group.id,
-                        "need_date": of_to_schedule.need_date.strftime("%Y-%m-%d"),
+                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
                         "scheduled_start": dt_to_str(start_dt),
                         "scheduled_end": dt_to_str(end_dt),
-                        "status": statut,
+                        "status": statut_affiche,
                         "retard_jours": retard_jours,
                         "operations": [
                             {
@@ -1039,7 +1304,9 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                     }
                 )
             else:
-                of_to_schedule.status = "ÉCHOUÉ"
+                # échec lié aux postes/capacité
+                status_affiche = "ÉCHOUÉ(poste indispo)"
+                of_to_schedule.status = status_affiche
                 of_to_schedule.scheduled_start_date = None
                 of_to_schedule.scheduled_end_date = None
                 smoothing_items.append(
@@ -1048,10 +1315,10 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                         "product_id": of_to_schedule.product_id,
                         "designation": of_to_schedule.designation,
                         "group_id": group.id,
-                        "need_date": of_to_schedule.need_date.strftime("%Y-%m-%d"),
+                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
                         "scheduled_start": None,
                         "scheduled_end": None,
-                        "status": "ÉCHOUÉ",
+                        "status": status_affiche,
                         "retard_jours": 0,
                         "operations": [],
                         "debug": fail_reason or "No slot",
@@ -1060,6 +1327,9 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
 
             scheduled_ofs.append(of_to_schedule)
 
+    # =========================
+    #  FIN : mise à jour des OF
+    # =========================
     final_by_id = {of.id: of for of in scheduled_ofs}
     updated_all = [final_by_id.get(orig.id, orig) for orig in all_ofs_with_groups]
 
@@ -1095,14 +1365,6 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
     def is_premix(of_obj):
         name = (of_obj.designation or "").strip().upper()
         return name.startswith("PREMIX")
-
-    def display_class(of_obj):
-        # tu peux garder ça si tu veux encore distinguer PF / SF / PREMIX
-        if is_premix(of_obj):
-            return 2
-        if of_obj.product_type == "PF":
-            return 0
-        return 1
 
     def get_bom_level(of_obj):
         """Niveau BOM effectif pour le tri (décroissant)."""
@@ -1150,11 +1412,9 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             ofs_in_group = [of for of in all_ofs_scheduled if of.assigned_group_id == group.id]
 
             # Ordre DÉCROISSANT sur le niveau BOM :
-            #   niveau le plus élevé en haut, plus faible en bas
             ofs_in_group_sorted = sorted(
                 ofs_in_group,
                 key=lambda x: (get_bom_level(x), x.need_date, x.product_id),
-                
             )
 
             for of_obj in ofs_in_group_sorted:
@@ -1168,7 +1428,7 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                 else:
                     processed_description = f"{desc_parts[0]} {desc_parts[1]}"
 
-                processed_order_code = of_obj.id[:10]
+                processed_order_code = of_obj.id
                 grp_flg = (
                     of_obj.assigned_group_id.replace("GRP", "")
                     if of_obj.assigned_group_id
@@ -1184,11 +1444,13 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     delay_days = (of_obj.scheduled_start_date - of_obj.need_date).days
                     delay_val = str(max(0, delay_days))
 
+                # 🔹 Stock_Produit PAR OF (PF ou SF/PS) : ne dépasse jamais Qty
                 stock_val = getattr(of_obj, "individual_product_stock", None)
                 if stock_val is None:
-                    stock_val = getattr(of_obj, "remaining_stock", 0.0)
+                    stock_val = getattr(of_obj, "remaining_stock", None)
                 if stock_val is None:
-                    stock_val = 0.0
+                    # fallback : au pire on affiche la quantité de l’OF
+                    stock_val = float(getattr(of_obj, "quantity", 0.0) or 0.0)
 
                 writer.writerow(
                     [
@@ -1217,11 +1479,9 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
         f.write("\n# OFs Non Affectés:\n")
         unassigned = [of for of in all_ofs_scheduled if of.id not in processed_of_ids_in_groups]
 
-        # Même ordre décroissant pour les non affectés
         unassigned_sorted = sorted(
             unassigned,
             key=lambda x: (get_bom_level(x), x.need_date, x.id),
-            
         )
 
         for of_obj in unassigned_sorted:
@@ -1253,9 +1513,9 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
 
             stock_val = getattr(of_obj, "individual_product_stock", None)
             if stock_val is None:
-                stock_val = getattr(of_obj, "remaining_stock", 0.0)
+                stock_val = getattr(of_obj, "remaining_stock", None)
             if stock_val is None:
-                stock_val = 0.0
+                stock_val = float(getattr(of_obj, "quantity", 0.0) or 0.0)
 
             writer.writerow(
                 [
@@ -1367,7 +1627,7 @@ def load_ofs_from_file(filepath):
                     bom_level_derived = 0
 
                 of = ManufacturingOrder(
-                    id=row[mapped_cols["Order Code"]],
+                    id=row[mapped_cols["Order Code"]],  # ex: BSK2511OF6948
                     designation=row[mapped_cols["Description"]],
                     product_id=part_val,
                     product_type=product_type_derived,
@@ -1481,92 +1741,164 @@ def load_bom_from_file(filepath):
     print(f"Loaded {len(bom_entries)} BOM entries (delimiter='{used_delim}', encoding='{used_enc}').")
     return bom_entries
 
-
 def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability, filepath_operations):
     print(
         f"Loading Posts, Unavailability & Operations from "
         f"{filepath_posts}, {filepath_post_unavailability}, {filepath_operations}"
     )
 
+    # ==========================
+    # 1) POSTS (multi-encodage)
+    # ==========================
     posts_map = {}
     try:
-        with open(filepath_posts, mode="r", encoding="utf-8-sig") as csvfile:
-            delimiter = detect_csv_delimiter(filepath_posts, fallback=",")
-            reader = csv.DictReader(csvfile, delimiter=delimiter)
-            required_cols_posts = ["PostID", "PostName", "DefaultCapacityHoursWeek"]
-            if not reader.fieldnames or not all(col in reader.fieldnames for col in required_cols_posts):
-                available_cols = reader.fieldnames if reader.fieldnames else []
+        required_cols_posts = ["PostID", "PostName", "DefaultCapacityHoursWeek"]
+
+        f_posts, reader_posts, used_delim_posts, used_enc_posts = _make_reader(
+            filepath_posts,
+            required_cols=None,
+            fallback=",",
+        )
+
+        if not reader_posts or not reader_posts.fieldnames:
+            raise FileNotFoundError(
+                f"Posts CSV {filepath_posts} appears empty or has no header."
+            )
+
+        # Vérifier la présence des colonnes obligatoires (insensible à la casse / espaces)
+        lower = {c.strip().lower(): c.strip() for c in reader_posts.fieldnames}
+        colmap_posts = {}
+        for col in required_cols_posts:
+            if col.lower() in lower:
+                colmap_posts[col] = lower[col.lower()]
+            else:
                 raise ValueError(
-                    f"Posts CSV {filepath_posts} missing required columns. "
-                    f"Need: {required_cols_posts}, Found: {available_cols}"
+                    f"Posts CSV {filepath_posts} missing required column '{col}'. "
+                    f"Found: {reader_posts.fieldnames}"
                 )
-            for row in reader:
-                post = Post(
-                    id=row["PostID"],
-                    name=row["PostName"],
-                    default_capacity_hours_week=int(row["DefaultCapacityHoursWeek"]),
-                )
-                posts_map[post.id] = post
+
+        for row in reader_posts:
+            raw_pid = row[colmap_posts["PostID"]]
+            pid = norm_code(raw_pid)  # normalisation
+            post = Post(
+                id=pid,
+                name=row[colmap_posts["PostName"]],
+                default_capacity_hours_week=int(row[colmap_posts["DefaultCapacityHoursWeek"]]),
+            )
+            posts_map[post.id] = post
+
+        if f_posts:
+            f_posts.close()
+
+        print(
+            f"Loaded {len(posts_map)} posts from {filepath_posts} "
+            f"(delimiter='{used_delim_posts}', encoding='{used_enc_posts}')."
+        )
+
     except FileNotFoundError:
         print(f"Warning: Posts file not found at {filepath_posts}. Using empty posts_map.")
     except Exception as e:
         print(f"Error loading Posts from {filepath_posts}: {e}")
 
+    # =======================================
+    # 2) INDISPONIBILITÉS (si fichier fourni)
+    # =======================================
     try:
         if filepath_post_unavailability and os.path.isfile(filepath_post_unavailability):
-            with open(filepath_post_unavailability, mode="r", encoding="utf-8-sig") as csvfile:
-                delimiter = detect_csv_delimiter(filepath_post_unavailability, fallback=",")
-                reader = csv.DictReader(csvfile, delimiter=delimiter)
+            f_unav, reader_unav, used_delim_unav, used_enc_unav = _make_reader(
+                filepath_post_unavailability,
+                required_cols=None,
+                fallback=",",
+            )
+            if reader_unav and reader_unav.fieldnames:
                 required_cols_unavail = ["PostID", "UnavailableStartDate", "UnavailableEndDate"]
-                if not reader.fieldnames or not all(col in reader.fieldnames for col in required_cols_unavail):
-                    pass
-                else:
-                    for row in reader:
-                        pid = row.get("PostID", "")
+                lower_u = {c.strip().lower(): c.strip() for c in reader_unav.fieldnames}
+                colmap_unav = {}
+                ok = True
+                for col in required_cols_unavail:
+                    if col.lower() in lower_u:
+                        colmap_unav[col] = lower_u[col.lower()]
+                    else:
+                        ok = False
+                        break
+                if ok:
+                    for row in reader_unav:
+                        raw_pid = row.get(colmap_unav["PostID"], "")
+                        pid = norm_code(raw_pid)
                         if (
                             pid in posts_map
-                            and row.get("UnavailableStartDate")
-                            and row.get("UnavailableEndDate")
+                            and row.get(colmap_unav["UnavailableStartDate"])
+                            and row.get(colmap_unav["UnavailableEndDate"])
                         ):
                             posts_map[pid].add_unavailable_period(
-                                row["UnavailableStartDate"], row["UnavailableEndDate"]
+                                row[colmap_unav["UnavailableStartDate"]],
+                                row[colmap_unav["UnavailableEndDate"]],
                             )
+                if f_unav:
+                    f_unav.close()
         else:
+            # pas de fichier d'indisponibilité -> on ignore
             pass
     except Exception as e:
         print(f"Warning: Failed reading unavailability file {filepath_post_unavailability}: {e}.")
 
+    # ==========================
+    # 3) OPERATIONS (comme avant)
+    # ==========================
     operations_map = defaultdict(list)
     try:
         with open(filepath_operations, mode="r", encoding="utf-8-sig") as csvfile:
             delimiter = detect_csv_delimiter(filepath_operations, fallback=",")
             reader = csv.DictReader(csvfile, delimiter=delimiter)
-            required_cols_ops = [
-                "ProductID",
-                "OperationName",
-                "PostID",
-                "StandardTimeHours",
-                "Sequence",
-                "Priority",
-            ]
-            if not reader.fieldnames or not all(col in reader.fieldnames for col in required_cols_ops):
-                raise ValueError(
-                    f"Operations CSV {filepath_operations} missing required columns. "
-                    f"Need: {required_cols_ops}, Found: {reader.fieldnames}"
-                )
+
+            # mapping souple des colonnes
+            aliases_ops = {
+                "ProductID": ["productid", "product id", "ofid"],
+                "OperationName": ["operationname", "operation", "opname"],
+                "PostID": ["postid", "poste", "post id"],
+                "StandardTimeHours": ["standardtimehours", "stdtime", "duree", "duration"],
+                "Sequence": ["sequence", "seq", "ordre"],
+                "Priority": ["priority", "priorite"],
+            }
+
+            if not reader.fieldnames:
+                raise ValueError("Operations CSV has no header")
+
+            lower = {c.strip().lower(): c.strip() for c in reader.fieldnames}
+            colmap = {}
+
+            for wanted, alts in aliases_ops.items():
+                keys = [wanted] + alts
+                hit = None
+                for k in keys:
+                    if k.lower() in lower:
+                        hit = lower[k.lower()]
+                        break
+                if not hit:
+                    raise ValueError(
+                        f"Column '{wanted}' not found in operations file. Found: {reader.fieldnames}"
+                    )
+                colmap[wanted] = hit
+
             for row in reader:
-                key = row.get("ProductID") if row.get("ProductID") else row.get(
-                    "ProductType", "UNKNOWN_OP_KEY"
-                )
-                if key == "UNKNOWN_OP_KEY":
+                raw_key = row.get(colmap["ProductID"]) or row.get("ProductType") or "UNKNOWN_OP_KEY"
+                key = norm_code(raw_key)
+                if key == "UNKNOWN_OP_KEY" or not key:
                     continue
+
+                raw_post_id = row.get(colmap["PostID"], "")
+                post_id_norm = norm_code(raw_post_id)
+
+                seq_str = row.get(colmap["Sequence"], "0") or "0"
+                pri_str = row.get(colmap["Priority"], "1") or "1"
+
                 op = Operation(
                     product_key=key,
-                    operation_name=row["OperationName"],
-                    post_id=row["PostID"],
-                    standard_time_hours=row["StandardTimeHours"],
-                    sequence=int(row["Sequence"]),
-                    priority=int(row.get("Priority", 1)),
+                    operation_name=row[colmap["OperationName"]],
+                    post_id=post_id_norm,
+                    standard_time_hours=row[colmap["StandardTimeHours"]],
+                    sequence=int(seq_str),
+                    priority=int(pri_str),
                 )
                 operations_map[key].append(op)
     except FileNotFoundError:
@@ -1579,6 +1911,7 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
         f"{sum(len(ops) for ops in operations_map.values())} operation rules."
     )
     return posts_map, operations_map
+
 
 
 def load_compact_input_file(filepath):
@@ -1632,7 +1965,7 @@ def load_compact_input_file(filepath):
                             )
                         )
                     elif tag == "BOM":
-                        # Format compact : BOM parent child qty_per_parent child_level [parent_level? -> à ajouter si tu veux]
+                        # Format compact : BOM parent child qty_per_parent child_level [parent_level?]
                         if len(parts) >= 6:
                             _, parent, child, qty_per_parent, child_level, parent_level = parts[:6]
                         else:
@@ -1665,9 +1998,11 @@ if __name__ == "__main__":
     ofs_file = "test_besoins.csv"
     # utilise le fichier client de nomenclature
     bom_file = "test_nomenclature_client.csv"
-    posts_file = "test_posts.csv"
-    post_unavailability_file = "post_unavailability.csv"
-    operations_file = "test_operations.csv"
+    # 🔹 utiliser les fichiers client que tu as envoyés
+    posts_file = "test_posts_client.csv"
+    # tu n'as pas encore de fichier d'indisponibilité -> on peut laisser une chaîne vide
+    post_unavailability_file = ""  # "post_unavailability.csv" si un jour tu l'ajoutes
+    operations_file = "test_operations_client.csv"
     output_file = "test_besoins_groupes_output.txt"
 
     if os.path.exists(compact_file):
@@ -1684,7 +2019,15 @@ if __name__ == "__main__":
         operations_file
     )
 
-    params = {"advance_retreat_weeks": ADVANCE_RETREAT_WEEKS}
+    # petit debug
+    print(f"[DEBUG] Nb posts: {len(posts_map)}")
+    print(f"[DEBUG] Nb clés opérations: {len(operations_map)}")
+    print(f"[DEBUG] Exemple clés opérations: {list(operations_map.keys())[:10]}")
+
+    params = {
+        "advance_retreat_weeks": ADVANCE_RETREAT_WEEKS,
+        # tu peux forcer un chemin si tu veux : "smoothing_json_path": "smoothing_view.json",
+    }
 
     groups, all_ofs_with_groups = run_grouping_algorithm(
         all_ofs,
