@@ -611,7 +611,7 @@
                     <div class="params-grid">
                         <div class="param-group">
                             <label class="param-label" for="horizon_weeks">
-                                Horizon de planification (semaines)
+                                Horizon de groupement (semaines)
                                 <div class="tooltip">
                                     <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
                                     <span class="tooltiptext">Nombre de semaines à considérer pour la planification (défaut: 4)</span>
@@ -620,6 +620,29 @@
                             <input type="number" name="horizon_weeks" id="horizon_weeks" class="param-input" value="4" min="1" max="52">
                         </div>
 
+                        <div class="param-group">
+                            <label class="param-label" for="smoothing_horizon_weeks">
+                                Retard autorisé durant le lissage (semaines)
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">
+                                        Nombre de semaines après la date de besoin autorisées pour le lissage
+                                        (défaut: 3)
+                                    </span>
+                                </div>
+                            </label>
+                            <input
+                                type="number"
+                                name="smoothing_horizon_weeks"
+                                id="smoothing_horizon_weeks"
+                                class="param-input"
+                                value="3"
+                                min="1"
+                                max="52"
+                            >
+                        </div>
+
+                        <!--
                         <div class="param-group">
                             <label class="param-label" for="max_lot_size">
                                 Taille de lot maximum
@@ -652,6 +675,7 @@
                             </label>
                             <input type="number" name="grouping_threshold" id="grouping_threshold" class="param-input" value="0.8" min="0" max="1" step="0.1">
                         </div>
+                        -->
                     </div>
                 </div>
 
