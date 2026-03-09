@@ -78,12 +78,21 @@
     .of-table th,.of-table td{padding:.75rem;text-align:left;border-bottom:1px solid var(--border-color);font-size:.9rem;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
     .of-table th{background:var(--bg-input);color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.5px;font-size:.8rem;position:sticky;top:0;z-index:1}
     .of-table tr:hover{background:rgba(37,99,235,.05)}
+    
+    /* ✅ Nouveau style pour les lignes filtrées */
+    .of-table tr.filtered-match{background:rgba(245,158,11,.2)!important}
+    .of-table tr.filtered-match:hover{background:rgba(245,158,11,.3)!important}
+    .of-table tr.filtered-mismatch{display:none}
 
     .filters{background:var(--bg-input);padding:1rem;border-radius:8px;margin-bottom:1rem;border:1px solid var(--border-color)}
     .filter-grid{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center}
     .search-input{width:100%;padding:.75rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:.9rem}
     .search-input:focus{outline:none;border-color:var(--primary-color)}
     .filter-toggle{background:var(--primary-color);color:#fff;border:none;padding:.75rem 1rem;border-radius:6px;cursor:pointer;font-size:.9rem;white-space:nowrap}
+    
+    /* ✅ Nouveau style pour les groupes avec correspondance */
+    .group-card.has-match{border:2px solid var(--warning-color)!important;box-shadow:0 0 15px rgba(245,158,11,.3)!important}
+    .group-card.no-match{opacity:0.5;filter:grayscale(0.7)}
 
     .alert{padding:1rem;border-radius:8px;margin-bottom:1rem;display:flex;align-items:center;gap:12px}
     .alert.warning{background:rgba(245,158,11,.1);border:1px solid var(--warning-color);color:var(--warning-color)}
@@ -268,14 +277,14 @@
           {% if _groups %}
           <div class="filters">
             <div class="filter-grid">
-              <input type="text" class="search-input" placeholder="Rechercher un groupe, produit ou OF..." id="groupSearch" onkeyup="filterGroups()"/>
+              <input type="text" class="search-input" placeholder="Rechercher un groupe, produit, OF ou description..." id="groupSearch" onkeyup="filterGroups()"/>
               <button class="filter-toggle" onclick="toggleAllGroups(this)"><i class="fas fa-expand-alt"></i> Tout développer</button>
             </div>
           </div>
 
           <div class="group-list" id="groupsList">
             {% for group in _groups %}
-            <div class="group-card" data-group-id="{{ group.id }}">
+            <div class="group-card" data-group-id="{{ group.id }}" data-group-content="">
               <div class="group-header" onclick="toggleGroup('{{ group.id }}')">
                 <div class="group-title"><i class="fas fa-layer-group"></i> Groupe #{{ group.id }}</div>
                 <button class="group-toggle" id="toggle-{{ group.id }}"><i class="fas fa-chevron-down"></i></button>
@@ -306,7 +315,7 @@
               <div class="group-ofs" id="ofs-{{ group.id }}">
                 {% if group.ofs %}
                 <div class="table-wrapper">
-                  <table class="of-table" data-group-id="{{ group.id }}">
+                  <table class="of-table" data-group-id="{{ group.id }}" id="table-{{ group.id }}">
                     <thead>
                       <tr>
                         <th>Part</th><th>Description</th><th>Order Code</th><th>FG</th><th>Qty</th><th>Date X3</th><th>Statut</th><th>Remaining Stock</th>
@@ -314,7 +323,7 @@
                     </thead>
                     <tbody>
                       {% for of in group.ofs %}
-                      <tr>
+                      <tr data-of-content="{{ pick(of,'Part','part','product_id') }} {{ pick(of,'Description','description','designation') }} {{ pick(of,'Order_Code','order_code','OF','of_code','id') }}">
                         <td>{{ pick(of,'Part','part','product_id') }}</td>
                         <td>{{ pick(of,'Description','description','designation') }}</td>
                         <td>{{ pick(of,'Order_Code','order_code','OF','of_code','id') }}</td>
@@ -512,15 +521,112 @@
       }
     }
 
-    function filterGroups(){
-      const searchTerm=document.getElementById('groupSearch').value.toLowerCase();
-      const groups=document.querySelectorAll('.group-card');
-      groups.forEach(group=>{
-        const headerText=group.querySelector('.group-header').textContent.toLowerCase();
-        const infoText=group.querySelector('.group-info').textContent.toLowerCase();
-        const match=headerText.includes(searchTerm)||infoText.includes(searchTerm);
-        group.style.display=match?'block':'none';
+    function filterGroups() {
+      const searchTerm = document.getElementById('groupSearch').value.toLowerCase().trim();
+      const groups = document.querySelectorAll('.group-card');
+      
+      if (!searchTerm) {
+        // ✅ Réinitialiser tout quand la recherche est vide
+        groups.forEach(group => {
+          group.classList.remove('has-match', 'no-match');
+          group.style.display = 'block';
+          
+          // Réinitialiser les lignes du tableau
+          const table = group.querySelector('.of-table');
+          if (table) {
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+              row.classList.remove('filtered-match', 'filtered-mismatch');
+              row.style.display = '';
+            });
+          }
+        });
+        return;
+      }
+      
+      let anyGroupHasMatch = false;
+      
+      groups.forEach(group => {
+        const groupId = group.getAttribute('data-group-id');
+        const headerText = group.querySelector('.group-header').textContent.toLowerCase();
+        const infoText = group.querySelector('.group-info').textContent.toLowerCase();
+        
+        // ✅ Vérifier si le groupe lui-même correspond
+        let groupHasMatch = headerText.includes(searchTerm) || infoText.includes(searchTerm);
+        
+        // ✅ Vérifier les OFs dans le groupe
+        const table = group.querySelector('.of-table');
+        if (table) {
+          const rows = table.querySelectorAll('tbody tr');
+          let anyRowHasMatch = false;
+          
+          rows.forEach(row => {
+            // ✅ Récupérer tout le contenu de la ligne pour la recherche
+            const rowContent = Array.from(row.querySelectorAll('td'))
+              .map(td => td.textContent.toLowerCase())
+              .join(' ');
+            
+            const rowMatches = rowContent.includes(searchTerm);
+            
+            if (rowMatches) {
+              groupHasMatch = true;
+              anyRowHasMatch = true;
+              row.classList.add('filtered-match');
+              row.classList.remove('filtered-mismatch');
+              row.style.display = '';
+            } else {
+              row.classList.remove('filtered-match');
+              row.classList.add('filtered-mismatch');
+              row.style.display = 'none';
+            }
+          });
+          
+          // ✅ Développer automatiquement le groupe s'il a des correspondances
+          if (anyRowHasMatch) {
+            const ofsElement = document.getElementById('ofs-' + groupId);
+            const toggleIcon = document.querySelector('#toggle-' + groupId + ' i');
+            if (ofsElement && !ofsElement.classList.contains('expanded')) {
+              ofsElement.classList.add('expanded');
+              if (toggleIcon) {
+                toggleIcon.classList.remove('fa-chevron-down');
+                toggleIcon.classList.add('fa-chevron-up');
+              }
+            }
+          }
+        }
+        
+        // ✅ Appliquer les styles au groupe
+        if (groupHasMatch) {
+          anyGroupHasMatch = true;
+          group.classList.add('has-match');
+          group.classList.remove('no-match');
+          group.style.display = 'block';
+        } else {
+          group.classList.remove('has-match');
+          group.classList.add('no-match');
+          group.style.display = 'none';
+        }
       });
+      
+      // ✅ Afficher un message si aucune correspondance
+      const noResultsMsg = document.getElementById('noResultsMessage');
+      if (!anyGroupHasMatch && searchTerm) {
+        if (!noResultsMsg) {
+          const msg = document.createElement('div');
+          msg.id = 'noResultsMessage';
+          msg.style.padding = '2rem';
+          msg.style.textAlign = 'center';
+          msg.style.color = 'var(--warning-color)';
+          msg.innerHTML = `
+            <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+            <h3>Aucun résultat trouvé</h3>
+            <p>Aucun groupe ou OF ne correspond à "${searchTerm}"</p>
+          `;
+          document.getElementById('groupsList').prepend(msg);
+        }
+      } else if (noResultsMsg) {
+        noResultsMsg.remove();
+      }
     }
 
     function downloadResults(){
@@ -548,9 +654,44 @@
         e.preventDefault();
         const activeTab=document.querySelector('.tab-content.active');
         const searchInput=activeTab.querySelector('.search-input');
-        if(searchInput) searchInput.focus();
+        if(searchInput){
+          searchInput.focus();
+          searchInput.select();
+        }
       }
-      if(e.key==='Escape'){ document.querySelectorAll('.search-input').forEach(i=>i.value=''); }
+      if(e.key==='Escape'){
+        document.querySelectorAll('.search-input').forEach(i=>{
+          i.value='';
+          filterGroups(); // ✅ Réinitialiser la recherche
+        });
+      }
+    });
+    
+    // ✅ Initialisation : stocker le contenu des groupes pour la recherche
+    document.addEventListener('DOMContentLoaded', function() {
+      const groups = document.querySelectorAll('.group-card');
+      groups.forEach(group => {
+        const groupId = group.getAttribute('data-group-id');
+        const headerText = group.querySelector('.group-header').textContent.toLowerCase();
+        const infoText = group.querySelector('.group-info').textContent.toLowerCase();
+        
+        // Récupérer le contenu de tous les OFs dans le groupe
+        let ofsContent = '';
+        const table = group.querySelector('.of-table');
+        if (table) {
+          const rows = table.querySelectorAll('tbody tr');
+          rows.forEach(row => {
+            const rowContent = Array.from(row.querySelectorAll('td'))
+              .map(td => td.textContent.toLowerCase())
+              .join(' ');
+            ofsContent += ' ' + rowContent;
+          });
+        }
+        
+        // Stocker dans un attribut data pour la recherche rapide
+        group.setAttribute('data-search-content', 
+          (headerText + ' ' + infoText + ofsContent).toLowerCase());
+      });
     });
   </script>
 </body>

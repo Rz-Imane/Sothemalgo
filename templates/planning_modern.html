@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Planning – Détail</title>
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-  <!-- Font Awesome pour l’icône lune/soleil -->
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
   <style>
     :root {
-      /* Couleurs principales (comme les autres pages) */
       --primary-color: #2563eb;
       --primary-hover: #1d4ed8;
       --secondary-color: #64748b;
@@ -20,7 +18,6 @@
       --warning-color: #f59e0b;
       --error-color: #ef4444;
 
-      /* Thème sombre par défaut */
       --bg-dark: #0f172a;
       --bg-card: #0b1222;
       --bg-input: #111827;
@@ -47,7 +44,6 @@
       line-height: 1.6;
     }
 
-    /* Thème clair */
     body.light-theme {
       --bg-dark: #f8fafc;
       --bg-card: #ffffff;
@@ -66,7 +62,6 @@
       padding: 0 16px;
     }
 
-    /* Header de page (titre + thème) */
     .page-header {
       display: flex;
       align-items: center;
@@ -113,6 +108,9 @@
       font-size: 18px;
       margin: 0 0 10px;
       color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     table {
@@ -209,6 +207,39 @@
       text-decoration: underline;
     }
 
+    .group-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(100, 116, 139, 0.2);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .group-badge.grp {
+      background: rgba(37, 99, 235, 0.2);
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .group-badge.indiv {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: var(--warning-color);
+      color: var(--warning-color);
+    }
+
+    .group-badge.single {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: var(--success-color);
+      color: var(--success-color);
+    }
+
+    .indiv-group {
+      border-left: 3px solid var(--warning-color);
+    }
+
     @media (max-width: 600px) {
       .page-header {
         flex-direction: column;
@@ -232,33 +263,51 @@
     {% if rows|length == 0 %}
       <div class="empty">Aucune donnée de planning. Lance d’abord l’analyse/lissage.</div>
     {% else %}
-      {# Regrouper les éléments par group_id (sans setdefault) #}
-      {% set groups = {} %}
+      {# ===== TRAITEMENT DES GROUPES RÉELS ===== #}
+      {% set real_groups = {} %}
+      {% set individual_ofs = [] %}
+      
       {% for r in rows %}
-        {% set gid = r.group_id or "Hors groupe" %}
-        {% if not groups.get(gid) %}{% set _ = groups.update({gid: []}) %}{% endif %}
-        {% set _ = groups[gid].append(r) %}
+        {% if r.group_id and r.group_id.startswith('GRP') %}
+          {# C'est un vrai groupe #}
+          {% set gid = r.group_id %}
+          {% if not real_groups.get(gid) %}{% set _ = real_groups.update({gid: []}) %}{% endif %}
+          {% set _ = real_groups[gid].append(r) %}
+        {% else %}
+          {# C'est un OF individuel #}
+          {% set _ = individual_ofs.append(r) %}
+        {% endif %}
       {% endfor %}
 
-      {% for gid, list_ in groups.items() %}
+      {# ===== AFFICHAGE DES GROUPES RÉELS ===== #}
+      {% for gid, list_ in real_groups.items() %}
         <div class="grp">
-          <h2>{{ "Groupe " ~ gid if gid != "Hors groupe" else "OF hors groupe" }}</h2>
+          <h2>
+            <span class="group-badge grp">{{ gid }}</span>
+            <span class="pill">{{ list_|length }} OF(s)</span>
+          </h2>
           <table>
             <thead>
               <tr>
+                <th>Groupe</th>
                 <th>OF</th>
                 <th>Article</th>
                 <th>Désignation</th>
                 <th>Besoin</th>
+                <th>Qty</th>
                 <th>Début planifié</th>
                 <th>Fin planifiée</th>
                 <th>Statut</th>
                 <th>Retard (j)</th>
+                <th>Avance (j)</th>
               </tr>
             </thead>
             <tbody>
               {% for it in list_ %}
                 <tr>
+                  <td>
+                    <span class="group-badge grp">{{ it.group_id }}</span>
+                  </td>
                   <td>{{ it.of_id }}</td>
                   <td>{{ it.product_id }}</td>
                   <td>
@@ -273,6 +322,7 @@
                     {% endif %}
                   </td>
                   <td><span class="pill">{{ it.need_date }}</span></td>
+                  <td>{{ it.qty_besoin or "—" }}</td>
                   <td>{{ it.scheduled_start or "—" }}</td>
                   <td>{{ it.scheduled_end or "—" }}</td>
                   <td>
@@ -288,19 +338,93 @@
                     {% endif %}
                   </td>
                   <td>{{ it.retard_jours or 0 }}</td>
+                  <td>{{ it.avance_jours or 0 }}</td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
       {% endfor %}
+
+      {# ===== AFFICHAGE DES OFs INDIVIDUELS ===== #}
+      {% if individual_ofs %}
+        <div class="grp">
+          <h2>
+            <span class="group-badge indiv">OFs INDIVIDUELS</span>
+            <span class="pill">{{ individual_ofs|length }} OF(s) traités séparément</span>
+          </h2>
+          
+          {% for it in individual_ofs|sort(attribute='of_id') %}
+            <div class="grp indiv-group" style="margin-top: 16px; border-left: 3px solid var(--warning-color); padding-left: 12px;">
+              <h3 style="font-size: 15px; margin-bottom: 8px; color: var(--warning-color);">
+                <i class="fas fa-file-alt"></i> OF {{ it.of_id }} 
+                <span class="pill" style="margin-left: 8px;">Individuel</span>
+              </h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Groupe</th>
+                    <th>OF</th>
+                    <th>Article</th>
+                    <th>Désignation</th>
+                    <th>Besoin</th>
+                    <th>Qty</th>
+                    <th>Début planifié</th>
+                    <th>Fin planifiée</th>
+                    <th>Statut</th>
+                    <th>Retard (j)</th>
+                    <th>Avance (j)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <span class="group-badge indiv">INDIVIDUEL</span>
+                    </td>
+                    <td>{{ it.of_id }}</td>
+                    <td>{{ it.product_id }}</td>
+                    <td>
+                      {{ it.designation or "—" }}
+                      {% if it.operations and it.operations|length > 0 %}
+                        <div class="ops">
+                          {% for op in it.operations %}
+                            • <strong>{{ op.operation }}</strong> (poste {{ op.post_id }}) :
+                            {{ op.start }} → {{ op.end }}<br/>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    </td>
+                    <td><span class="pill">{{ it.need_date }}</span></td>
+                    <td>{{ it.qty_besoin or "—" }}</td>
+                    <td>{{ it.scheduled_start or "—" }}</td>
+                    <td>{{ it.scheduled_end or "—" }}</td>
+                    <td>
+                      {% set st = (it.status or "") %}
+                      {% if "ÉCHOUÉ" in st %}
+                        <span class="status fail">{{ st }}</span>
+                      {% elif "NON" in st %}
+                        <span class="status warn">{{ st }}</span>
+                      {% elif "OUI" in st %}
+                        <span class="status ok">{{ st }}</span>
+                      {% else %}
+                        <span class="status">{{ st or "—" }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ it.retard_jours or 0 }}</td>
+                    <td>{{ it.avance_jours or 0 }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
     {% endif %}
 
     <p><a href="/" class="back-link">← Retour</a></p>
   </div>
 
   <script>
-    // même clé que sur les autres pages
     const THEME_KEY = 'sothema_theme_v2';
     let isDarkMode = true;
 
@@ -347,7 +471,6 @@
       if (savedTheme === 'light' || savedTheme === 'dark') {
         applyTheme(savedTheme);
       } else {
-        // Première visite : dark
         applyTheme('dark');
       }
     });

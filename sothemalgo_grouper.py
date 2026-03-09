@@ -4,13 +4,21 @@ import calendar
 import csv
 import os
 import re
+import json
+from functools import lru_cache
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
 
 HORIZON_H_MONTHS = 2
 HORIZON_H_WEEKS = 10
-POST_DEFAULT_CAPACITY_HOURS_WEEK = 35
-ADVANCE_RETREAT_WEEKS = 3
+ADVANCE_RETREAT_WEEKS = 3          # Valeur par défaut si colonnes non renseignées
 ENCODING_CANDIDATES = ("utf-8-sig", "cp1252", "latin-1", "utf-8")
 
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
 
 def norm_code(x: str) -> str:
     if x is None:
@@ -20,18 +28,18 @@ def norm_code(x: str) -> str:
     return s.upper()
 
 
-def detect_csv_delimiter(filepath, fallback=',', sample_size=65536):
-    candidates = [b'\t', b';', b'|', b',', b':', b'^']
+def detect_csv_delimiter(filepath, fallback=",", sample_size=65536):
+    candidates = [b"\t", b";", b"|", b",", b":", b"^"]
     try:
-        with open(filepath, 'rb') as f:
+        with open(filepath, "rb") as f:
             sample = f.read(sample_size)
-    except FileNotFoundError:
+    except (FileNotFoundError, Exception):
         return fallback
-    except Exception:
-        return fallback
+
     counts = {d: sample.count(d) for d in candidates}
     if all(c == 0 for c in counts.values()):
         return fallback
+
     try:
         lines = sample.splitlines()[:50]
         scored = []
@@ -49,37 +57,29 @@ def detect_csv_delimiter(filepath, fallback=',', sample_size=65536):
         if scored:
             scored.sort(reverse=True)
             winner = scored[0][1]
-            return winner.decode('ascii') if isinstance(winner, bytes) else winner
+            return winner.decode("ascii") if isinstance(winner, bytes) else winner
     except Exception:
         pass
+
     winner = max(counts.items(), key=lambda kv: kv[1])[0]
-    return winner.decode('ascii') if isinstance(winner, bytes) else winner
+    return winner.decode("ascii") if isinstance(winner, bytes) else winner
 
 
-def _make_reader(filepath, required_cols=None, fallback=','):
+def _make_reader(filepath, required_cols=None, fallback=","):
     delim = detect_csv_delimiter(filepath, fallback=fallback)
     last_err = None
     for enc in ENCODING_CANDIDATES:
         try:
             f = open(filepath, "r", encoding=enc, newline="")
             reader = csv.DictReader(f, delimiter=delim)
-            _ = reader.fieldnames
-            if not _:
+            cols = reader.fieldnames
+            if not cols:
                 f.close()
                 continue
-            if required_cols is not None and not all(col in _ for col in required_cols):
-                pass
             return f, reader, delim, enc
         except FileNotFoundError:
             return None, None, fallback, None
-        except UnicodeDecodeError as e:
-            last_err = e
-            try:
-                f.close()
-            except Exception:
-                pass
-            continue
-        except Exception as e:
+        except (UnicodeDecodeError, Exception) as e:
             last_err = e
             try:
                 f.close()
@@ -99,14 +99,56 @@ def try_parse_float(value):
     text = str(value).strip()
     if not text:
         raise ValueError("Cannot parse empty string as float.")
-    sanitized = text.replace('\u00a0', '').replace(' ', '')
-    if sanitized.count(',') > 0 and sanitized.count('.') > 0:
-        sanitized = sanitized.replace('.', '')
-    sanitized = sanitized.replace(',', '.')
+    sanitized = text.replace("\u00a0", "").replace(" ", "")
+    if sanitized.count(",") > 0 and sanitized.count(".") > 0:
+        sanitized = sanitized.replace(".", "")
+    sanitized = sanitized.replace(",", ".")
     return float(sanitized)
 
 
+def _norm(x: str) -> str:
+    """Simple normalization used in many places."""
+    return "".join(str(x or "").split()).upper()
+
+
+# ============================================================================
+# CACHED BOM FUNCTIONS
+# ============================================================================
+
+@lru_cache(maxsize=None)
+def find_qty_of_component_in_product_cached(product_to_make_id, component_to_find_id, bom_tuple):
+    """
+    Cached version that expects BOM data as a tuple of tuples (parent, child, qty)
+    for hashability. This replaces the recursive function with memoization.
+    """
+    if product_to_make_id == component_to_find_id:
+        return 1.0
+    total = 0.0
+    for parent, child, qty in bom_tuple:
+        if parent == product_to_make_id:
+            total += qty * find_qty_of_component_in_product_cached(child, component_to_find_id, bom_tuple)
+    return total
+
+
+def prepare_bom_tuple(bom_data):
+    """Convert BOM list to a tuple of tuples for caching."""
+    return tuple((b.parent_product_id, b.child_product_id, b.quantity_child_per_parent) for b in bom_data)
+
+
+# ============================================================================
+# CLASSES
+# ============================================================================
+
 class ManufacturingOrder:
+    __slots__ = (
+        'id', 'designation', 'product_id', 'raw_product_id', 'product_type',
+        'bom_level', 'need_date', 'source_qty', 'quantity', 'unit',
+        'horizon_weeks', 'retard_weeks', 'advance_weeks',
+        'assigned_group_id', 'status',
+        'scheduled_start_date', 'scheduled_end_date', 'fg', 'cat', 'us', 'fs',
+        'individual_product_stock', 'effective_bom_level', 'normalized_id', 'normalized_product'
+    )
+
     def __init__(
         self,
         id,
@@ -120,12 +162,16 @@ class ManufacturingOrder:
         cat,
         us,
         fs,
+        horizon_weeks=None,
+        retard_weeks=None,
+        advance_weeks=None,
         unit="U",
-        status="UNASSIGNED"
+        status="UNASSIGNED",
     ):
         self.id = id
         self.designation = designation
-        self.product_id = product_id
+        self.raw_product_id = product_id
+        self.product_id = _norm(product_id)   
         self.product_type = product_type
         self.bom_level = int(bom_level)
 
@@ -144,6 +190,27 @@ class ManufacturingOrder:
         self.quantity = try_parse_float(quantity)
         self.unit = unit
 
+        self.horizon_weeks = None
+        if horizon_weeks not in (None, ""):
+            try:
+                self.horizon_weeks = int(try_parse_float(horizon_weeks))
+            except Exception:
+                self.horizon_weeks = None
+
+        self.retard_weeks = None
+        if retard_weeks not in (None, ""):
+            try:
+                self.retard_weeks = int(try_parse_float(retard_weeks))
+            except Exception:
+                self.retard_weeks = None
+
+        self.advance_weeks = None
+        if advance_weeks not in (None, ""):
+            try:
+                self.advance_weeks = int(try_parse_float(advance_weeks))
+            except Exception:
+                self.advance_weeks = None
+
         self.assigned_group_id = None
         self.status = "UNASSIGNED"
         self.scheduled_start_date = None
@@ -154,12 +221,17 @@ class ManufacturingOrder:
         self.us = us
         self.fs = fs
 
-        self.individual_product_stock = 0
+        self.individual_product_stock = 0.0
+        self.effective_bom_level = self.bom_level   
+
+        # Pre-normalized keys for faster lookups
+        self.normalized_id = _norm(self.id)
+        self.normalized_product = self.product_id   
 
     def __repr__(self):
         lvl = getattr(self, "effective_bom_level", self.bom_level)
         return (
-            f"OF(id={self.id}, desig='{self.designation}', prod_id='{self.product_id}', "
+            f"OF(id={self.id}, desig='{self.designation}', prod_id='{self.raw_product_id}', "
             f"type='{self.product_type}', level={lvl}, "
             f"need={self.need_date.strftime('%Y-%m-%d')}, qty={self.quantity}, "
             f"fg='{self.fg}', cat='{self.cat}', indiv_stock={self.individual_product_stock}, "
@@ -168,6 +240,9 @@ class ManufacturingOrder:
 
 
 class BOMEntry:
+    __slots__ = ('parent_product_id', 'child_product_id', 'quantity_child_per_parent',
+                 'child_bom_level', 'parent_bom_level', 'raw_parent', 'raw_child')
+
     def __init__(
         self,
         parent_product_id,
@@ -176,8 +251,10 @@ class BOMEntry:
         child_bom_level,
         parent_bom_level=None,
     ):
-        self.parent_product_id = parent_product_id
-        self.child_product_id = child_product_id
+        self.raw_parent = parent_product_id
+        self.raw_child = child_product_id
+        self.parent_product_id = _norm(parent_product_id)
+        self.child_product_id = _norm(child_product_id)
         self.quantity_child_per_parent = try_parse_float(quantity_child_per_parent)
 
         try:
@@ -195,13 +272,19 @@ class BOMEntry:
 
     def __repr__(self):
         return (
-            f"BOM(parent='{self.parent_product_id}' uses "
-            f"{self.quantity_child_per_parent} of child='{self.child_product_id}' "
+            f"BOM(parent='{self.raw_parent}' uses "
+            f"{self.quantity_child_per_parent} of child='{self.raw_child}' "
             f"(child_lvl={self.child_bom_level}, parent_lvl={self.parent_bom_level}))"
         )
 
 
 class Group:
+    __slots__ = (
+        'id', 'ps_product_id', 'raw_ps_product_id', 'time_window_start', 'time_window_end',
+        'ofs', 'current_ps_stock_available', 'component_stocks', 'individual_product_stocks',
+        'product_consumption', 'ofs_by_id', 'ofs_by_product'
+    )
+
     def __init__(
         self,
         id,
@@ -209,146 +292,112 @@ class Group:
         initial_ps_of,
         window_start_date,
         window_end_date,
-        initial_ps_as_stock=False
+        initial_ps_as_stock=False,
     ):
         self.id = id
-        self.ps_product_id = ps_product_id
+        self.raw_ps_product_id = ps_product_id
+        self.ps_product_id = _norm(ps_product_id)
         self.time_window_start = window_start_date
         self.time_window_end = window_end_date
 
         self.ofs = []
+        self.ofs_by_id = {}
+        self.ofs_by_product = defaultdict(list)
         self.current_ps_stock_available = 0
 
-        self.component_stocks = {}
-        self.individual_product_stocks = {}
-        self.product_consumption = {}
+        self.component_stocks = defaultdict(float)
+        self.individual_product_stocks = defaultdict(float)
+        self.product_consumption = defaultdict(float)
 
         ps_q = initial_ps_of.quantity if initial_ps_as_stock else 0
         self.add_of(initial_ps_of, ps_quantity_change=ps_q)
 
     def add_of(self, of_to_add, ps_quantity_change=0):
         self.ofs.append(of_to_add)
+        self.ofs_by_id[of_to_add.id] = of_to_add
+        self.ofs_by_product[of_to_add.product_id].append(of_to_add)
+
         self.current_ps_stock_available += ps_quantity_change
-
-        if of_to_add.product_id not in self.component_stocks:
-            self.component_stocks[of_to_add.product_id] = 0
         self.component_stocks[of_to_add.product_id] += ps_quantity_change
+        # ensure keys exist
+        self.individual_product_stocks[of_to_add.product_id]  
+        self.product_consumption[of_to_add.product_id]        
 
-        product_id = of_to_add.product_id
-        if product_id not in self.individual_product_stocks:
-            self.individual_product_stocks[product_id] = 0
-        if product_id not in self.product_consumption:
-            self.product_consumption[product_id] = 0
-
-        of_to_add.individual_product_stock = 0
+        of_to_add.individual_product_stock = 0.0
         of_to_add.assigned_group_id = self.id
         of_to_add.status = "ASSIGNED"
 
     def calculate_consumption(self, bom_data):
-        from collections import defaultdict as _dd
-
-        def norm(x: str) -> str:
-            if x is None:
-                return ""
-            s = str(x).replace('\ufeff', '')
-            s = ''.join(s.split())
-            return s.upper()
-
         if not self.ofs:
-            self.component_stocks = {}
-            self.individual_product_stocks = {}
-            for of in getattr(self, "ofs", []):
-                of.individual_product_stock = 0.0
+            self.component_stocks.clear()
+            self.individual_product_stocks.clear()
+            self.product_consumption.clear()
             return
 
+        # Precompute product levels from BOM (using normalized IDs)
         product_level = {}
-
         for bom in bom_data:
-            p = norm(bom.parent_product_id)
-            c = norm(bom.child_product_id)
+            p = bom.parent_product_id
+            c = bom.child_product_id
+            cl = bom.child_bom_level
+            pl = bom.parent_bom_level
+            if c and cl > 0:
+                product_level[c] = max(product_level.get(c, 0), cl)
+            if p and pl > 0:
+                product_level[p] = max(product_level.get(p, 0), pl)
 
-            try:
-                c_lvl = int(getattr(bom, "child_bom_level", 0) or 0)
-            except Exception:
-                c_lvl = 0
-
-            try:
-                p_lvl = int(getattr(bom, "parent_bom_level", 0) or 0)
-            except Exception:
-                p_lvl = 0
-
-            if c and c_lvl > 0:
-                product_level[c] = c_lvl if c not in product_level else max(product_level[c], c_lvl)
-            if p and p_lvl > 0:
-                product_level[p] = p_lvl if p not in product_level else max(product_level[p], p_lvl)
-
-        produced_qty = _dd(float)
+        # Produced quantities per product
+        produced_qty = defaultdict(float)
         for of in self.ofs:
-            pid = norm(of.product_id)
-            produced_qty[pid] += float(of.quantity)
+            produced_qty[of.product_id] += of.quantity
 
         if not produced_qty:
-            self.component_stocks = {}
-            self.individual_product_stocks = {}
-            for of in self.ofs:
-                of.individual_product_stock = 0.0
+            self._clear_and_reset()
             return
 
-        for pid in produced_qty.keys():
+        # Ensure all produced products have a level (default 0)
+        for pid in produced_qty:
             if pid not in product_level:
                 product_level[pid] = 0
 
-        levels_in_group = {product_level.get(pid, 0) for pid in produced_qty.keys()}
-        max_level = max(levels_in_group) if levels_in_group else 0
-        min_level = min(levels_in_group) if levels_in_group else 0
+        levels = set(product_level[pid] for pid in produced_qty)
+        max_level = max(levels) if levels else 0
+        min_level = min(levels) if levels else 0
 
-        bom_by_parent = _dd(list)
+        # Build parent->children map only for products that are produced
+        bom_by_parent = defaultdict(list)
         for bom in bom_data:
-            p = norm(bom.parent_product_id)
-            c = norm(bom.child_product_id)
-            if not p or not c:
-                continue
+            p = bom.parent_product_id
             if p in produced_qty:
-                bom_by_parent[p].append((c, float(bom.quantity_child_per_parent)))
+                bom_by_parent[p].append((bom.child_product_id, bom.quantity_child_per_parent))
 
-        product_stock = {pid: 0.0 for pid in produced_qty.keys()}
-        product_consumption = _dd(float)
+        product_stock = defaultdict(float)
+        product_consumption = defaultdict(float)
 
+        # Process levels descending
         for lvl in range(max_level, min_level - 1, -1):
             for pid, plvl in product_level.items():
-                if plvl != lvl:
+                if plvl != lvl or pid not in produced_qty:
                     continue
-                if pid not in produced_qty:
-                    continue
-
                 qty_prod = produced_qty[pid]
                 if qty_prod <= 0:
                     continue
-
-                product_stock[pid] = product_stock.get(pid, 0.0) + qty_prod
-
+                product_stock[pid] += qty_prod
                 for child_id, q_child in bom_by_parent.get(pid, []):
-                    if child_id not in produced_qty:
-                        continue
                     need = qty_prod * q_child
-                    product_stock[child_id] = product_stock.get(child_id, 0.0) - need
+                    product_stock[child_id] -= need
                     product_consumption[child_id] += need
 
+        # Distribute remaining stock to individual OFs
         remaining_per_of = {of.id: 0.0 for of in self.ofs}
-
-        for prod_norm in produced_qty.keys():
+        for prod_norm in produced_qty:
             stock_left = max(0.0, product_stock.get(prod_norm, 0.0))
-
-            ofs_same_product = [of for of in self.ofs if norm(of.product_id) == prod_norm]
-            ofs_same_product_sorted = sorted(
-                ofs_same_product,
-                key=lambda o: (o.need_date, o.id)
-            )
-
-            for of in ofs_same_product_sorted:
+            ofs_same = self.ofs_by_product.get(prod_norm, [])
+            ofs_sorted = sorted(ofs_same, key=lambda o: (o.need_date, o.id))
+            for of in ofs_sorted:
                 if stock_left <= 0:
                     break
-                assign = min(stock_left, float(of.quantity))
+                assign = min(stock_left, of.quantity)
                 remaining_per_of[of.id] = assign
                 stock_left -= assign
 
@@ -356,28 +405,40 @@ class Group:
             of.individual_product_stock = max(0.0, remaining_per_of.get(of.id, 0.0))
 
         self.product_consumption = dict(product_consumption)
-        self.individual_product_stocks = {
-            pid: sum(
-                of.individual_product_stock
-                for of in self.ofs
-                if norm(of.product_id) == pid
-            )
-            for pid in {norm(of.product_id) for of in self.ofs}
-        }
         self.component_stocks = dict(product_stock)
+
+        # Update individual product stocks summary
+        self.individual_product_stocks = {
+            pid: sum(of.individual_product_stock for of in self.ofs_by_product.get(pid, []))
+            for pid in produced_qty
+        }
+
+    def _clear_and_reset(self):
+        self.component_stocks.clear()
+        self.individual_product_stocks.clear()
+        self.product_consumption.clear()
+        for of in self.ofs:
+            of.individual_product_stock = 0.0
 
 
 class Post:
-    """Poste avec capacité hebdomadaire et indisponibilités."""
+    __slots__ = (
+        'id', 'name', 'is_bottleneck', 'work_start_time', 'work_end_time',
+        'lunch_start_time', 'lunch_end_time', 'daily_capacity_hours',
+        'weekly_capacity_by_week', 'weekly_load_hours', 'unavailable_periods',
+        'scheduled_slots', 'planning_start_monday', '_max_defined_week'
+    )
+
     def __init__(
         self,
         id,
         name,
-        default_capacity_hours_week=POST_DEFAULT_CAPACITY_HOURS_WEEK,
         weekly_capacity_by_week=None,
+        is_bottleneck=True,
     ):
         self.id = id
         self.name = name
+        self.is_bottleneck = bool(is_bottleneck)
 
         self.work_start_time = time(0, 0)
         self.work_end_time = time(23, 59)
@@ -386,16 +447,16 @@ class Post:
 
         self.daily_capacity_hours = 24.0
 
-        self.default_capacity_hours_week = float(default_capacity_hours_week or 0)
         self.weekly_capacity_by_week = weekly_capacity_by_week or {}
 
-        from collections import defaultdict as _dd
-        self.weekly_load_hours = _dd(float)
+        self.weekly_load_hours = defaultdict(float)
 
         self.unavailable_periods = []
         self.scheduled_slots = []
 
         self.planning_start_monday = None
+
+        self._max_defined_week = max(self.weekly_capacity_by_week.keys()) if self.weekly_capacity_by_week else 0
 
     def set_week0_monday(self, monday_date):
         self.planning_start_monday = monday_date
@@ -417,13 +478,11 @@ class Post:
 
     def _allowed_hours_for_week(self, dt_obj: datetime) -> float:
         w = self._relative_week_index(dt_obj)
-        return float(self.weekly_capacity_by_week.get(w, self.default_capacity_hours_week))
+        return float(self.weekly_capacity_by_week.get(w, 0.0))
 
     def _weekly_hours_distribution(self, start_dt: datetime, end_dt: datetime):
-        from collections import defaultdict as _dd
-        dist = _dd(float)
+        dist = defaultdict(float)
         current = start_dt
-
         while current < end_dt:
             wk = self._week_key(current)
             monday_of_week = self.planning_start_monday + timedelta(days=7 * (wk - 1))
@@ -432,15 +491,14 @@ class Post:
             hours = (segment_end - current).total_seconds() / 3600.0
             dist[wk] += hours
             current = segment_end
-
         return dist
 
     def _can_add_slot_in_week(self, start_dt: datetime, end_dt: datetime) -> bool:
+        if not self.is_bottleneck:
+            return True
         dist = self._weekly_hours_distribution(start_dt, end_dt)
         for wk, add_hours in dist.items():
-            monday_of_week = self.planning_start_monday + timedelta(days=7 * (wk - 1))
-            dt_for_wk = datetime.combine(monday_of_week, time.min)
-            allowed = self._allowed_hours_for_week(dt_for_wk)
+            allowed = self._allowed_hours_for_week(start_dt)  # Note: using start_dt, but week determined by wk
             used = self.weekly_load_hours[wk]
             if used + add_hours > allowed + 1e-6:
                 return False
@@ -452,21 +510,14 @@ class Post:
             self.weekly_load_hours[wk] += hours
 
     def _recompute_weekly_load_from_slots(self):
-        from collections import defaultdict as _dd
-        self.weekly_load_hours = _dd(float)
+        self.weekly_load_hours.clear()
         for s, e, _ in self.scheduled_slots:
-            dist = self._weekly_hours_distribution(s, e)
-            for wk, hours in dist.items():
-                self.weekly_load_hours[wk] += hours
+            self._register_slot_in_week_load(s, e)
 
     def add_unavailable_period(self, start_date_str, end_date_str):
         try:
-            start_dt = datetime.strptime(start_date_str, "%Y-%m-%d").replace(
-                hour=0, minute=0, second=0
-            )
-            end_dt = datetime.strptime(end_date_str, "%Y-%m-%d").replace(
-                hour=23, minute=59, second=59
-            )
+            start_dt = datetime.strptime(start_date_str, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+            end_dt = datetime.strptime(end_date_str, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
             if end_dt < start_dt:
                 return
             self.unavailable_periods.append((start_dt, end_dt))
@@ -495,9 +546,7 @@ class Post:
                 days_to_next_monday = (7 - current_dt.weekday()) % 7
                 if days_to_next_monday == 0:
                     days_to_next_monday = 7
-                current_dt = (current_dt + timedelta(days=days_to_next_monday)).replace(
-                    hour=0, minute=0
-                )
+                current_dt = (current_dt + timedelta(days=days_to_next_monday)).replace(hour=0, minute=0)
                 continue
 
             moved = False
@@ -533,8 +582,7 @@ class Post:
                 continue
 
             next_minute_dt = current_dt + timedelta(minutes=1)
-            seconds_this_minute = 60
-            can_consume_seconds = min(remaining_seconds, seconds_this_minute)
+            can_consume_seconds = min(remaining_seconds, 60)
             remaining_seconds -= can_consume_seconds
             current_dt = next_minute_dt
 
@@ -542,25 +590,68 @@ class Post:
             return datetime.max
         return current_dt
 
+    def _search_limit_datetime(self, search_start_dt_param: datetime):
+        if not self.is_bottleneck:
+            return search_start_dt_param + timedelta(days=365)
+
+        if not self.weekly_capacity_by_week or self._max_defined_week <= 0:
+            return search_start_dt_param + timedelta(days=365)
+
+        self._ensure_planning_start(search_start_dt_param)
+        last_monday = self.planning_start_monday + timedelta(days=7 * (self._max_defined_week - 1))
+        last_end = datetime.combine(last_monday + timedelta(days=7), time.min)
+        return max(search_start_dt_param + timedelta(days=1), last_end)
+
     def find_available_slot(self, search_start_dt_param: datetime, duration_hours: float, of_id_to_ignore=None):
         current_try_start_dt = self._get_next_working_datetime(search_start_dt_param)
-        max_search_datetime = search_start_dt_param + timedelta(days=365)
+        max_search_datetime = self._search_limit_datetime(search_start_dt_param)
 
         while current_try_start_dt < max_search_datetime:
             potential_end_dt = self.calculate_end_datetime(current_try_start_dt, duration_hours)
             if potential_end_dt == datetime.max:
-                current_try_start_dt = self._get_next_working_datetime(
-                    current_try_start_dt + timedelta(days=1)
-                )
+                current_try_start_dt = self._get_next_working_datetime(current_try_start_dt + timedelta(days=1))
                 continue
 
             if not self._can_add_slot_in_week(current_try_start_dt, potential_end_dt):
                 days_to_next_monday = (7 - current_try_start_dt.weekday()) % 7
                 if days_to_next_monday == 0:
                     days_to_next_monday = 7
-                next_week_monday = (current_try_start_dt + timedelta(days=days_to_next_monday)).replace(
-                    hour=0, minute=0
-                )
+                next_week_monday = (current_try_start_dt + timedelta(days=days_to_next_monday)).replace(hour=0, minute=0)
+                current_try_start_dt = self._get_next_working_datetime(next_week_monday)
+                continue
+
+            is_overlap = False
+            for booked_start, booked_end, booked_of_id in self.scheduled_slots:
+                if of_id_to_ignore and booked_of_id == of_id_to_ignore:
+                    continue
+                if current_try_start_dt < booked_end and potential_end_dt > booked_start:
+                    is_overlap = True
+                    current_try_start_dt = self._get_next_working_datetime(booked_end)
+                    break
+
+            if not is_overlap:
+                return current_try_start_dt, potential_end_dt
+
+        return None, None
+
+    def find_available_slot_bounded(self, search_start_dt_param: datetime, duration_hours: float, latest_end_dt: datetime, of_id_to_ignore=None):
+        current_try_start_dt = self._get_next_working_datetime(search_start_dt_param)
+        max_search_datetime = min(self._search_limit_datetime(search_start_dt_param), latest_end_dt)
+
+        while current_try_start_dt < max_search_datetime:
+            potential_end_dt = self.calculate_end_datetime(current_try_start_dt, duration_hours)
+            if potential_end_dt == datetime.max:
+                current_try_start_dt = self._get_next_working_datetime(current_try_start_dt + timedelta(days=1))
+                continue
+
+            if potential_end_dt > latest_end_dt:
+                return None, None
+
+            if not self._can_add_slot_in_week(current_try_start_dt, potential_end_dt):
+                days_to_next_monday = (7 - current_try_start_dt.weekday()) % 7
+                if days_to_next_monday == 0:
+                    days_to_next_monday = 7
+                next_week_monday = (current_try_start_dt + timedelta(days=days_to_next_monday)).replace(hour=0, minute=0)
                 current_try_start_dt = self._get_next_working_datetime(next_week_monday)
                 continue
 
@@ -587,71 +678,40 @@ class Post:
     def clear_schedule_for_of(self, of_id):
         if not self.scheduled_slots:
             return
-        self.scheduled_slots = [
-            (s, e, o) for (s, e, o) in self.scheduled_slots if o != of_id
-        ]
+        self.scheduled_slots = [(s, e, o) for (s, e, o) in self.scheduled_slots if o != of_id]
         self._recompute_weekly_load_from_slots()
 
     def __repr__(self):
         return (
             f"Post(id={self.id}, name='{self.name}', "
-            f"daily_hours={self.daily_capacity_hours:.2f}, "
+            f"goulot={1 if self.is_bottleneck else 0}, "
             f"unavailable_periods={len(self.unavailable_periods)}, "
             f"scheduled_slots={len(self.scheduled_slots)})"
         )
 
 
 class Operation:
+    __slots__ = ('product_key', 'operation_name', 'post_id', 'standard_time_hours', 'sequence', 'priority')
+
     def __init__(self, product_key, operation_name, post_id, standard_time_hours, sequence, priority):
-        self.product_key = product_key
+        self.product_key = _norm(product_key)
         self.operation_name = operation_name
-        self.post_id = post_id
+        self.post_id = _norm(post_id)
         self.standard_time_hours = try_parse_float(standard_time_hours)
         self.sequence = int(sequence)
         self.priority = int(priority)
 
 
-def find_qty_of_component_in_product(product_to_make_id, component_to_find_id, bom_data, memo=None):
-    if memo is None:
-        memo = {}
-    key = (product_to_make_id, component_to_find_id)
-    if key in memo:
-        return memo[key]
-    if product_to_make_id == component_to_find_id:
-        memo[key] = 1.0
-        return 1.0
-
-    total_component_needed = 0.0
-    direct_components = [b for b in bom_data if b.parent_product_id == product_to_make_id]
-    for bom_line in direct_components:
-        qty_in_child = find_qty_of_component_in_product(
-            bom_line.child_product_id,
-            component_to_find_id,
-            bom_data,
-            memo
-        )
-        total_component_needed += bom_line.quantity_child_per_parent * qty_in_child
-
-    memo[key] = total_component_needed
-    return total_component_needed
-
-
-def sort_ofs_for_grouping(of_list):
-    return sorted(
-        of_list,
-        key=lambda of: (of.designation, -getattr(of, "effective_bom_level", 0), of.need_date)
-    )
-
-
-def _norm(x: str) -> str:
-    return ''.join(str(x or '').split()).upper()
-
+# ============================================================================
+# GROUPING ALGORITHM 
+# ============================================================================
 
 def build_bom_graph(bom_data):
+    """Build an undirected graph from BOM for connected components."""
     G = defaultdict(set)
     for b in bom_data:
-        p = _norm(b.parent_product_id)
-        c = _norm(b.child_product_id)
+        p = b.parent_product_id
+        c = b.child_product_id
         if p and c:
             G[p].add(c)
             G[c].add(p)
@@ -659,11 +719,11 @@ def build_bom_graph(bom_data):
 
 
 def connected_component_nodes(G, start):
-    start = _norm(start)
-    if not start:
+    start_norm = _norm(start)
+    if not start_norm:
         return set()
     seen = set()
-    q = deque([start])
+    q = deque([start_norm])
     while q:
         u = q.popleft()
         if u in seen:
@@ -676,131 +736,116 @@ def connected_component_nodes(G, start):
 
 
 def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
+    # Compute product levels from BOM once
+    product_level = {}
+    for b in bom_data:
+        p = b.parent_product_id
+        c = b.child_product_id
+        cl = b.child_bom_level
+        pl = b.parent_bom_level
+        if c and cl > 0:
+            product_level[c] = max(product_level.get(c, 0), cl)
+        if p and pl > 0:
+            product_level[p] = max(product_level.get(p, 0), pl)
+
+    for of in all_ofs:
+        pid = of.product_id  
+        lvl = product_level.get(pid, 0)
+        of.effective_bom_level = lvl
+
+    def get_level(of):
+        return of.effective_bom_level
+
+    bom_graph = build_bom_graph(bom_data)
+
+    # Indexes for fast lookups
+    ofs_by_id = {of.id: of for of in all_ofs}
+    ofs_by_product = defaultdict(list)
+    for of in all_ofs:
+        ofs_by_product[of.product_id].append(of)
+
+    # Set of unassigned OF ids
+    unassigned_ids = {of.id for of in all_ofs if of.assigned_group_id is None}
+
     group_counter = 1
     groups = []
     skipped = set()
 
-    def norm(x):
-        return ''.join(str(x or '').split()).upper()
-
-    bom_graph = build_bom_graph(bom_data)
-
-    product_level = {}
-
-    for b in bom_data:
-        p = norm(b.parent_product_id)
-        c = norm(b.child_product_id)
-
-        try:
-            c_lvl = int(getattr(b, "child_bom_level", 0) or 0)
-        except Exception:
-            c_lvl = 0
-
-        try:
-            p_lvl = int(getattr(b, "parent_bom_level", 0) or 0)
-        except Exception:
-            p_lvl = 0
-
-        if c and c_lvl > 0:
-            product_level[c] = c_lvl if c not in product_level else max(product_level[c], c_lvl)
-        if p and p_lvl > 0:
-            product_level[p] = p_lvl if p not in product_level else max(product_level[p], p_lvl)
-
-    for of in all_ofs:
-        pid = norm(of.product_id)
-        lvl = product_level.get(pid, 0)
-        try:
-            of.effective_bom_level = int(lvl)
-        except Exception:
-            of.effective_bom_level = 0
-
-    def get_level(of):
-        try:
-            return int(getattr(of, "effective_bom_level", 0))
-        except Exception:
-            return 0
-
-    def first_unassigned_highest_level():
+    while unassigned_ids:
+        # Find anchor: highest level, earliest need date among unassigned not skipped
         best_of = None
-        best_level = None
+        best_level = -1
         best_date = None
-        for of in all_ofs:
-            if of.id in skipped:
+        for of_id in unassigned_ids:
+            if of_id in skipped:
                 continue
-            if of.assigned_group_id is not None:
-                continue
+            of = ofs_by_id[of_id]
             lvl = get_level(of)
-            if best_of is None or lvl > best_level or (
-                lvl == best_level and of.need_date < best_date
-            ):
+            if best_of is None or lvl > best_level or (lvl == best_level and of.need_date < best_date):
                 best_of = of
                 best_level = lvl
                 best_date = of.need_date
-        return best_of
-
-    while True:
-        anchor_of = first_unassigned_highest_level()
+        anchor_of = best_of
         if anchor_of is None:
             break
 
-        anchor_pid_norm = norm(anchor_of.product_id)
-
+        anchor_pid_norm = anchor_of.product_id
         family = connected_component_nodes(bom_graph, anchor_of.product_id)
         if not family:
             family = {anchor_pid_norm}
 
-        window_start_date = anchor_of.need_date
-        window_end_date = window_start_date + timedelta(weeks=horizon_H_weeks_param) - timedelta(days=1)
+        h_weeks = horizon_H_weeks_param
+        if anchor_of.horizon_weeks not in (None, 0, ""):
+            try:
+                h_weeks = max(1, int(anchor_of.horizon_weeks))
+            except Exception:
+                h_weeks = horizon_H_weeks_param
 
-        raw_candidates = [
-            of
-            for of in all_ofs
-            if (
-                of.assigned_group_id is None
-                and window_start_date <= of.need_date <= window_end_date
-                and norm(of.product_id) in family
-            )
-        ]
+        window_start = anchor_of.need_date
+        window_end = window_start + timedelta(weeks=h_weeks) - timedelta(days=1)
 
-        cand_pids_raw = {norm(of.product_id) for of in raw_candidates}
+        # Candidate OFs: unassigned, in window, product in family
+        raw_candidates = []
+        for pid in family:
+            for of in ofs_by_product.get(pid, []):
+                if of.id in unassigned_ids and window_start <= of.need_date <= window_end:
+                    raw_candidates.append(of)
+
+        cand_pids_raw = {of.product_id for of in raw_candidates}
+        # Determine related PIDs 
         related_pids = set()
-
         for b in bom_data:
-            p = norm(b.parent_product_id)
-            c = norm(b.child_product_id)
+            p = b.parent_product_id
+            c = b.child_product_id
             if p in cand_pids_raw and c in cand_pids_raw:
                 related_pids.add(p)
                 related_pids.add(c)
 
-        candidates = [
-            of for of in raw_candidates
-            if norm(of.product_id) in related_pids
-        ]
+        candidates = [of for of in raw_candidates if of.product_id in related_pids]
 
-        if len(candidates) <= 1:
-            skipped.add(anchor_of.id)
-            continue
-
-        if anchor_of not in candidates:
+        if len(candidates) <= 1 or anchor_of not in candidates:
             skipped.add(anchor_of.id)
             continue
 
         current_group = Group(
             id=f"GRP{group_counter}",
-            ps_product_id=anchor_of.product_id,
+            ps_product_id=anchor_of.raw_product_id,
             initial_ps_of=anchor_of,
-            window_start_date=window_start_date,
-            window_end_date=window_end_date,
+            window_start_date=window_start,
+            window_end_date=window_end,
             initial_ps_as_stock=False,
         )
 
-        def sort_key(of):
-            return (-get_level(of), of.need_date, of.product_id)
-
-        for ofx in sorted(candidates, key=sort_key):
+        # Sort candidates by level descending, then need date, then product id
+        candidates_sorted = sorted(candidates, key=lambda o: (-get_level(o), o.need_date, o.product_id))
+        for ofx in candidates_sorted:
             if ofx.id == anchor_of.id:
                 continue
             current_group.add_of(ofx, ps_quantity_change=0)
+            unassigned_ids.discard(ofx.id)
+
+        # Remove anchor from unassigned set
+        unassigned_ids.discard(anchor_of.id)
 
         current_group.calculate_consumption(bom_data)
 
@@ -810,8 +855,10 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
     return groups, all_ofs
 
 
+# ============================================================================
+# SMOOTHING AND SCHEDULING 
+# ============================================================================
 def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map, operations_map, params):
-    import json
     from collections import defaultdict as _dd
 
     def dt_to_str(dt):
@@ -823,14 +870,74 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
         delta = (scheduled_end_dt.date() - need_dt.date()).days
         return delta if delta > 0 else 0
 
-    advance_retreat_weeks = int(params.get("advance_retreat_weeks", 3))
-    adv_td = timedelta(weeks=advance_retreat_weeks)
+    def qty_besoin_raw(of_obj):
+        raw = getattr(of_obj, "source_qty", None)
+        raw = (str(raw).strip() if raw is not None else "")
+        if raw:
+            return raw
+        try:
+            return str(float(getattr(of_obj, "quantity", 0) or 0))
+        except Exception:
+            return ""
 
-    all_need_dates = [
-        of.need_date
-        for of in all_ofs_with_groups
-        if getattr(of, "need_date", None) is not None
-    ]
+    default_advance_weeks = int(params.get("advance_retreat_weeks", 3))
+    default_retard_weeks = int(params.get("advance_retreat_weeks", 3))
+
+    def get_advance_weeks(of_obj):
+        v = getattr(of_obj, "advance_weeks", None)
+        if v in (None, "", 0):
+            return default_advance_weeks
+        try:
+            return max(0, int(v))
+        except Exception:
+            return default_advance_weeks
+
+    def get_retard_weeks(of_obj):
+        v = getattr(of_obj, "retard_weeks", None)
+        if v in (None, "", 0):
+            return default_retard_weeks
+        try:
+            return max(0, int(v))
+        except Exception:
+            return default_retard_weeks
+
+    def week_bounds(dt_obj: datetime):
+        monday = (dt_obj.date() - timedelta(days=dt_obj.weekday()))
+        ws = datetime.combine(monday, time.min)
+        we = ws + timedelta(days=7)
+        return ws, we
+
+    def candidate_week_starts(need_dt: datetime, advance_weeks: int, retard_weeks: int):
+        adv_td = timedelta(weeks=advance_weeks)
+        ret_td = timedelta(weeks=retard_weeks)
+        earliest_start = need_dt - adv_td
+        latest_end = need_dt + ret_td
+
+        earliest_monday = (earliest_start.date() - timedelta(days=earliest_start.weekday()))
+        need_monday = (need_dt.date() - timedelta(days=need_dt.weekday()))
+        latest_monday = (latest_end.date() - timedelta(days=latest_end.weekday()))
+
+        mondays = []
+        cur = earliest_monday
+        while cur <= latest_monday:
+            mondays.append(datetime.combine(cur, time.min))
+            cur += timedelta(days=7)
+
+        need_monday_dt = datetime.combine(need_monday, time.min)
+        earlier = [m for m in mondays if m < need_monday_dt]
+        later = [m for m in mondays if m > need_monday_dt]
+
+        earlier.sort(reverse=True)
+        later.sort()
+
+        result = []
+        if need_monday_dt in mondays:
+            result.append(need_monday_dt)
+        result.extend(earlier)
+        result.extend(later)
+        return result
+
+    all_need_dates = [of.need_date for of in all_ofs_with_groups if of.need_date]
     if all_need_dates:
         min_need = min(all_need_dates)
         base_monday = (min_need - timedelta(days=min_need.weekday())).date()
@@ -848,41 +955,21 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
     scheduled_ofs = []
 
     def get_level(of):
-        try:
-            return int(getattr(of, "effective_bom_level", 0))
-        except Exception:
-            return 0
-
-    def _norm_code_local(x):
-        return "".join(str(x or "").replace("\ufeff", "").split()).upper()
+        return getattr(of, "effective_bom_level", 0)
 
     parent_to_children = _dd(set)
-    for b in bom_data:
-        p_raw = getattr(b, "parent_product_id", "") or ""
-        c_raw = getattr(b, "child_product_id", "") or ""
-        p = _norm_code_local(p_raw)
-        c = _norm_code_local(c_raw)
-        if p and c:
-            parent_to_children[p].add(c)
-
     bom_children = _dd(list)
     for b in bom_data:
-        p_raw = getattr(b, "parent_product_id", "") or ""
-        c_raw = getattr(b, "child_product_id", "") or ""
-        p = _norm_code_local(p_raw)
-        c = _norm_code_local(c_raw)
+        p = b.parent_product_id
+        c = b.child_product_id
         if p and c:
-            try:
-                q = float(b.quantity_child_per_parent)
-            except Exception:
-                q = try_parse_float(getattr(b, "quantity_child_per_parent", 0) or 0)
-            bom_children[p].append((c, q))
+            parent_to_children[p].add(c)
+            bom_children[p].append((c, b.quantity_child_per_parent))
 
     def order_group_ofs_by_bom_chain(group_ofs):
         product_to_ofs = _dd(list)
         for of in group_ofs:
-            pn = _norm_code_local(of.product_id)
-            product_to_ofs[pn].append(of)
+            product_to_ofs[of.product_id].append(of)
 
         for lst in product_to_ofs.values():
             lst.sort(key=lambda o: (o.need_date, o.id))
@@ -892,10 +979,7 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
             levels = [get_level(of) for of in ofs]
             product_level[pn] = max(levels) if levels else 0
 
-        products_sorted = sorted(
-            product_to_ofs.keys(),
-            key=lambda pn: -product_level.get(pn, 0)
-        )
+        products_sorted = sorted(product_to_ofs.keys(), key=lambda pn: -product_level.get(pn, 0))
 
         visited_of_ids = set()
         ordered = []
@@ -919,71 +1003,196 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
 
         return ordered
 
-    def find_first_op_two_phase(post_obj, need_dt, op_hours, group_start_date,
-                                min_group_start=None, not_before_dt=None):
-        adv_td_local = timedelta(weeks=advance_retreat_weeks)
+    def schedule_single_of(of_to_schedule, group_id=None):
+        need_dt = of_to_schedule.need_date
+        advance_w = get_advance_weeks(of_to_schedule)
+        retard_w = get_retard_weeks(of_to_schedule)
 
-        g_start = (
-            group_start_date
-            if isinstance(group_start_date, datetime)
-            else datetime.combine(group_start_date, time.min)
-        )
+        earliest_allowed = need_dt - timedelta(weeks=advance_w)
+        latest_allowed = need_dt + timedelta(weeks=retard_w)
 
-        if min_group_start is not None and min_group_start > g_start:
-            g_start = min_group_start
+        key_of = of_to_schedule.normalized_id
+        key_prod = of_to_schedule.product_id
+        key_type = _norm(of_to_schedule.product_type)
 
-        if not_before_dt is not None and not_before_dt > g_start:
-            g_start = not_before_dt
+        ops = (operations_map.get(key_of, []) or
+               operations_map.get(key_prod, []) or
+               operations_map.get(key_type, []))
 
-        need_d = need_dt.date()
-        hi_d = (need_dt + adv_td_local).date()
+        if not ops:
+            status = "ÉCHOUÉ(poste indispo)"
+            of_to_schedule.status = status
+            of_to_schedule.scheduled_start_date = None
+            of_to_schedule.scheduled_end_date = None
+            smoothing_items.append({
+                "of_id": of_to_schedule.id,
+                "product_id": of_to_schedule.raw_product_id,
+                "designation": of_to_schedule.designation,
+                "group_id": group_id if group_id else "INDIVIDUEL",
+                "qty_besoin": qty_besoin_raw(of_to_schedule),
+                "need_date": need_dt.strftime("%Y-%m-%d"),
+                "scheduled_start": None,
+                "scheduled_end": None,
+                "status": status,
+                "retard_jours": 0,
+                "avance_jours": 0,
+                "operations": [],
+                "debug": "No operations",
+            })
+            return of_to_schedule
 
-        a_start = max(g_start, need_dt - adv_td_local)
-        if not_before_dt is not None and a_start < not_before_dt:
-            a_start = not_before_dt
-        a_start = post_obj._get_next_working_datetime(a_start)
+        ops = sorted(ops, key=lambda o: o.sequence)
 
-        s, e = post_obj.find_available_slot(a_start, op_hours, of_id_to_ignore=None)
-        if s and e and s.date() <= need_d and e.date() <= hi_d:
-            return s, e
+        for op_def in ops:
+            post = posts_map.get(op_def.post_id)
+            if post:
+                post.clear_schedule_for_of(of_to_schedule.id + "_" + op_def.operation_name)
 
-        next_day_midnight = datetime.combine(need_d + timedelta(days=1), time.min)
-        b_start = max(next_day_midnight, g_start)
-        if not_before_dt is not None and b_start < not_before_dt:
-            b_start = not_before_dt
-        b_start = post_obj._get_next_working_datetime(b_start)
+        chain_last_end = None
+        op_sched = []
+        feasible = True
 
-        if b_start.date() <= hi_d:
-            s, e = post_obj.find_available_slot(b_start, op_hours, of_id_to_ignore=None)
-            if s and e and (need_d < s.date() <= hi_d) and e.date() <= hi_d:
-                return s, e
+        week_starts = candidate_week_starts(need_dt, advance_w, retard_w)
 
-        return None, None
+        for ws in week_starts:
+            we = ws + timedelta(days=7)
+            if ws > latest_allowed:
+                break
+
+            start_search = max(ws, earliest_allowed)
+            chain_last_end = None
+            op_sched_try = []
+            ok = True
+
+            for op_def in ops:
+                post = posts_map.get(op_def.post_id)
+                if not post:
+                    ok = False
+                    break
+
+                dur_h = op_def.standard_time_hours
+
+                if chain_last_end is not None:
+                    start_search = max(start_search, chain_last_end)
+
+                start_search = post._get_next_working_datetime(start_search)
+
+                s_dt, e_dt = post.find_available_slot_bounded(
+                    start_search,
+                    dur_h,
+                    latest_end_dt=we,
+                    of_id_to_ignore=of_to_schedule.id + "_" + op_def.operation_name,
+                )
+
+                if s_dt and e_dt and e_dt > latest_allowed:
+                    s_dt, e_dt = None, None
+
+                if not s_dt or not e_dt:
+                    ok = False
+                    break
+
+                op_sched_try.append((op_def, post, s_dt, e_dt))
+                chain_last_end = e_dt
+                start_search = e_dt
+
+            if ok and op_sched_try:
+                op_sched = op_sched_try
+                feasible = True
+                break
+            else:
+                feasible = False
+
+        if feasible and op_sched:
+            for op_def, post, s_dt, e_dt in op_sched:
+                post.book_slot(s_dt, e_dt, of_to_schedule.id + "_" + op_def.operation_name)
+
+            start_dt = op_sched[0][2]
+            end_dt = op_sched[-1][3]
+            of_to_schedule.scheduled_start_date = start_dt
+            of_to_schedule.scheduled_end_date = end_dt
+
+            start_d = start_dt.date()
+            if start_d <= need_dt.date():
+                statut_calc = "OUI"
+            elif need_dt.date() < start_d <= latest_allowed.date():
+                statut_calc = "NON"
+            else:
+                statut_calc = "ÉCHOUÉ"
+
+            statut = "NON" if statut_calc == "ÉCHOUÉ" else statut_calc
+            of_to_schedule.status = statut
+
+            retard_jours = days_delay_if_late(end_dt, need_dt) if statut == "NON" else 0
+            if start_dt and start_dt < need_dt:
+                avance_jours = (need_dt - start_dt).days
+            else:
+                avance_jours = 0
+
+            smoothing_items.append({
+                "of_id": of_to_schedule.id,
+                "product_id": of_to_schedule.raw_product_id,
+                "designation": of_to_schedule.designation,
+                "group_id": group_id if group_id else "INDIVIDUEL",
+                "qty_besoin": qty_besoin_raw(of_to_schedule),
+                "need_date": need_dt.strftime("%Y-%m-%d"),
+                "scheduled_start": dt_to_str(start_dt),
+                "scheduled_end": dt_to_str(end_dt),
+                "status": statut,
+                "retard_jours": retard_jours,
+                "avance_jours": avance_jours,
+                "operations": [
+                    {
+                        "operation": d[0].operation_name,
+                        "post_id": d[0].post_id,
+                        "start": dt_to_str(d[2]),
+                        "end": dt_to_str(d[3]),
+                    }
+                    for d in op_sched
+                ],
+            })
+        else:
+            status = "ÉCHOUÉ(poste indispo)"
+            of_to_schedule.status = status
+            of_to_schedule.scheduled_start_date = None
+            of_to_schedule.scheduled_end_date = None
+
+            smoothing_items.append({
+                "of_id": of_to_schedule.id,
+                "product_id": of_to_schedule.raw_product_id,
+                "designation": of_to_schedule.designation,
+                "group_id": group_id if group_id else "INDIVIDUEL",
+                "qty_besoin": qty_besoin_raw(of_to_schedule),
+                "need_date": need_dt.strftime("%Y-%m-%d"),
+                "scheduled_start": None,
+                "scheduled_end": None,
+                "status": status,
+                "retard_jours": 0,
+                "avance_jours": 0,
+                "operations": [],
+                "debug": "No available slot within allowed advance/retard weeks",
+            })
+
+        return of_to_schedule
+
+    group_post_last_end = {}
 
     for group in sorted(groups, key=lambda g: g.time_window_start):
         group_ofs = [of for of in all_ofs_with_groups if of.assigned_group_id == group.id]
-
         ofs_sorted = order_group_ofs_by_bom_chain(group_ofs)
 
-        group_products_norm = {_norm_code_local(of.product_id) for of in group_ofs}
-
+        group_products_norm = {of.product_id for of in group_ofs}
         production_lots = _dd(list)
 
         canonical_norm_to_raw = {}
-        for b in bom_data:
-            for raw in [
-                getattr(b, "parent_product_id", "") or "",
-                getattr(b, "child_product_id", "") or "",
-            ]:
-                pn = _norm_code_local(raw)
-                if pn and pn not in canonical_norm_to_raw:
-                    canonical_norm_to_raw[pn] = raw
+        for of in group_ofs:
+            if of.product_id not in canonical_norm_to_raw:
+                canonical_norm_to_raw[of.product_id] = of.raw_product_id
 
-        group_post_last_end = {}
+        group_post_last_end.clear()
 
         def compute_stock_feasibility(of_obj):
-            p_norm = _norm_code_local(of_obj.product_id)
-            qty_parent = float(getattr(of_obj, "quantity", 0) or 0)
+            p_norm = of_obj.product_id
+            qty_parent = of_obj.quantity
             if qty_parent <= 0:
                 return True, None, {}, ""
 
@@ -1002,10 +1211,7 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 if needed <= 0:
                     continue
 
-                lots = sorted(
-                    production_lots.get(child_norm, []),
-                    key=lambda l: l["end_dt"]
-                )
+                lots = sorted(production_lots.get(child_norm, []), key=lambda l: l["end_dt"])
                 remaining = needed
                 child_ready = None
                 tmp_alloc = []
@@ -1015,25 +1221,19 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                     free = float(lot.get("qty_free", 0.0) or 0.0)
                     if free <= 0:
                         continue
-
                     take = min(free, remaining)
                     if take <= 0:
                         continue
-
                     remaining -= take
                     total_available += take
                     tmp_alloc.append((idx, take))
                     child_ready = lot["end_dt"]
-
                     if remaining <= 1e-9:
                         break
 
                 if remaining > 1e-9:
                     child_raw = canonical_norm_to_raw.get(child_norm, child_norm)
-                    reason = (
-                        f"Stock insuffisant pour composant {child_raw}: "
-                        f"besoin={needed}, dispo={total_available}"
-                    )
+                    reason = f"Stock insuffisant pour composant {child_raw}: besoin={needed}, dispo={total_available}"
                     return False, None, {}, reason
 
                 allocations[child_norm] = tmp_alloc
@@ -1044,114 +1244,105 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
 
         def commit_allocations(allocations):
             for child_norm, uses in allocations.items():
-                lots = sorted(
-                    production_lots.get(child_norm, []),
-                    key=lambda l: l["end_dt"]
-                )
+                lots = production_lots.get(child_norm, [])
+                if not lots:
+                    continue
+                lots_sorted = sorted(lots, key=lambda l: l["end_dt"])
                 for idx, qty_used in uses:
-                    if 0 <= idx < len(lots):
-                        lots[idx]["qty_free"] = float(
-                            lots[idx].get("qty_free", 0.0) or 0.0
-                        ) - qty_used
-                production_lots[child_norm] = lots
+                    if 0 <= idx < len(lots_sorted):
+                        lots_sorted[idx]["qty_free"] = float(lots_sorted[idx].get("qty_free", 0.0) or 0.0) - qty_used
+                production_lots[child_norm] = lots_sorted
 
         for of_to_schedule in ofs_sorted:
-            need_dt_for_smoothing = of_to_schedule.need_date
-            need_d = need_dt_for_smoothing.date()
-            hi_d = (need_dt_for_smoothing + adv_td).date()
+            need_dt = of_to_schedule.need_date
+            advance_w = get_advance_weeks(of_to_schedule)
+            retard_w = get_retard_weeks(of_to_schedule)
+            earliest_allowed = need_dt - timedelta(weeks=advance_w)
+            latest_allowed = need_dt + timedelta(weeks=retard_w)
 
-            stock_ok, components_ready_dt, allocations, stock_reason = compute_stock_feasibility(
-                of_to_schedule
-            )
+            stock_ok, components_ready_dt, allocations, stock_reason = compute_stock_feasibility(of_to_schedule)
             if not stock_ok:
-                status_affiche = "ÉCHOUÉ(stock insuffisant)"
-                of_to_schedule.status = status_affiche
+                status = "ÉCHOUÉ(stock insuffisant)"
+                of_to_schedule.status = status
                 of_to_schedule.scheduled_start_date = None
                 of_to_schedule.scheduled_end_date = None
-                smoothing_items.append(
-                    {
-                        "of_id": of_to_schedule.id,
-                        "product_id": of_to_schedule.product_id,
-                        "designation": of_to_schedule.designation,
-                        "group_id": group.id,
-                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
-                        "scheduled_start": None,
-                        "scheduled_end": None,
-                        "status": status_affiche,
-                        "retard_jours": 0,
-                        "operations": [],
-                        "debug": stock_reason,
-                    }
-                )
+                smoothing_items.append({
+                    "of_id": of_to_schedule.id,
+                    "product_id": of_to_schedule.raw_product_id,
+                    "designation": of_to_schedule.designation,
+                    "group_id": group.id,
+                    "qty_besoin": qty_besoin_raw(of_to_schedule),
+                    "need_date": need_dt.strftime("%Y-%m-%d"),
+                    "scheduled_start": None,
+                    "scheduled_end": None,
+                    "status": status,
+                    "retard_jours": 0,
+                    "avance_jours": 0,
+                    "operations": [],
+                    "debug": stock_reason,
+                })
                 scheduled_ofs.append(of_to_schedule)
                 continue
 
-            prod_norm = _norm_code_local(of_to_schedule.product_id)
+            prod_norm = of_to_schedule.product_id
             children_norms = parent_to_children.get(prod_norm, set())
             if children_norms:
-                blocked_by_component_failure = False
+                blocked = False
                 for child_pid_norm in children_norms:
-                    child_ofs = [
-                        ofc for ofc in group_ofs
-                        if _norm_code_local(ofc.product_id) == child_pid_norm
-                    ]
+                    child_ofs = [ofc for ofc in group_ofs if ofc.product_id == child_pid_norm]
                     if child_ofs and all(str(ofc.status).startswith("ÉCHOUÉ") for ofc in child_ofs):
-                        blocked_by_component_failure = True
+                        blocked = True
                         break
-
-                if blocked_by_component_failure:
-                    status_affiche = "ÉCHOUÉ(stock insuffisant)"
-                    of_to_schedule.status = status_affiche
+                if blocked:
+                    status = "ÉCHOUÉ(stock insuffisant)"
+                    of_to_schedule.status = status
                     of_to_schedule.scheduled_start_date = None
                     of_to_schedule.scheduled_end_date = None
-                    smoothing_items.append(
-                        {
-                            "of_id": of_to_schedule.id,
-                            "product_id": of_to_schedule.product_id,
-                            "designation": of_to_schedule.designation,
-                            "group_id": group.id,
-                            "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
-                            "scheduled_start": None,
-                            "scheduled_end": None,
-                            "status": status_affiche,
-                            "retard_jours": 0,
-                            "operations": [],
-                            "debug": "Blocked because component OFs are all ÉCHOUÉ",
-                        }
-                    )
+                    smoothing_items.append({
+                        "of_id": of_to_schedule.id,
+                        "product_id": of_to_schedule.raw_product_id,
+                        "designation": of_to_schedule.designation,
+                        "group_id": group.id,
+                        "qty_besoin": qty_besoin_raw(of_to_schedule),
+                        "need_date": need_dt.strftime("%Y-%m-%d"),
+                        "scheduled_start": None,
+                        "scheduled_end": None,
+                        "status": status,
+                        "retard_jours": 0,
+                        "avance_jours": 0,
+                        "operations": [],
+                        "debug": "Blocked because component OFs are all ÉCHOUÉ",
+                    })
                     scheduled_ofs.append(of_to_schedule)
                     continue
 
-            key_of = _norm_code_local(of_to_schedule.id)
+            key_of = of_to_schedule.normalized_id
             key_prod = prod_norm
-            key_type = _norm_code_local(of_to_schedule.product_type)
-
-            ops = (
-                operations_map.get(key_of, [])
-                or operations_map.get(key_prod, [])
-                or operations_map.get(key_type, [])
-            )
+            key_type = _norm(of_to_schedule.product_type)
+            ops = (operations_map.get(key_of, []) or
+                   operations_map.get(key_prod, []) or
+                   operations_map.get(key_type, []))
 
             if not ops:
-                status_affiche = "ÉCHOUÉ(poste indispo)"
-                of_to_schedule.status = status_affiche
+                status = "ÉCHOUÉ(poste indispo)"
+                of_to_schedule.status = status
                 of_to_schedule.scheduled_start_date = None
                 of_to_schedule.scheduled_end_date = None
-                smoothing_items.append(
-                    {
-                        "of_id": of_to_schedule.id,
-                        "product_id": of_to_schedule.product_id,
-                        "designation": of_to_schedule.designation,
-                        "group_id": group.id,
-                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
-                        "scheduled_start": None,
-                        "scheduled_end": None,
-                        "status": status_affiche,
-                        "retard_jours": 0,
-                        "operations": [],
-                        "debug": "No operations",
-                    }
-                )
+                smoothing_items.append({
+                    "of_id": of_to_schedule.id,
+                    "product_id": of_to_schedule.raw_product_id,
+                    "designation": of_to_schedule.designation,
+                    "group_id": group.id,
+                    "qty_besoin": qty_besoin_raw(of_to_schedule),
+                    "need_date": need_dt.strftime("%Y-%m-%d"),
+                    "scheduled_start": None,
+                    "scheduled_end": None,
+                    "status": status,
+                    "retard_jours": 0,
+                    "avance_jours": 0,
+                    "operations": [],
+                    "debug": "No operations",
+                })
                 scheduled_ofs.append(of_to_schedule)
                 continue
 
@@ -1162,153 +1353,159 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 if post:
                     post.clear_schedule_for_of(of_to_schedule.id + "_" + op_def.operation_name)
 
-            last_end = None
-            op_sched = []
+            chosen_sched = None
+            chosen_temp_post_end = None
             feasible = True
             fail_reason = ""
 
-            for i, op_def in enumerate(ops):
-                post = posts_map.get(op_def.post_id)
-                if not post:
-                    feasible = False
-                    fail_reason = f"Missing post {op_def.post_id}"
+            week_starts = candidate_week_starts(need_dt, advance_w, retard_w)
+
+            for ws in week_starts:
+                we = ws + timedelta(days=7)
+                if ws > latest_allowed:
                     break
 
-                dur_h = op_def.standard_time_hours
-                group_last_for_post = group_post_last_end.get(post.id)
+                start_search = max(ws, earliest_allowed)
+                chain_last_end = None
+                op_sched_try = []
+                temp_post_end = {}
+                ok = True
 
-                if i == 0:
-                    s_dt, e_dt = find_first_op_two_phase(
-                        post,
-                        need_dt_for_smoothing,
-                        dur_h,
-                        group.time_window_start,
-                        min_group_start=group_last_for_post,
-                        not_before_dt=components_ready_dt,
-                    )
-                else:
-                    start_search = post._get_next_working_datetime(last_end)
+                for op_def in ops:
+                    post = posts_map.get(op_def.post_id)
+                    if not post:
+                        ok = False
+                        fail_reason = f"Missing post {op_def.post_id}"
+                        break
 
-                    if group_last_for_post is not None and group_last_for_post > start_search:
-                        start_search = post._get_next_working_datetime(group_last_for_post)
+                    dur_h = op_def.standard_time_hours
+                    real_last = group_post_last_end.get(post.id)
+                    tent_last = temp_post_end.get(post.id)
+                    last_for_post = max([d for d in (real_last, tent_last) if d is not None], default=None)
 
-                    if components_ready_dt is not None and start_search < components_ready_dt:
-                        start_search = post._get_next_working_datetime(components_ready_dt)
+                    if components_ready_dt is not None:
+                        start_search = max(start_search, components_ready_dt)
 
-                    s_dt, e_dt = post.find_available_slot(
+                    if chain_last_end is not None:
+                        start_search = max(start_search, chain_last_end)
+
+                    if last_for_post is not None:
+                        start_search = max(start_search, last_for_post)
+
+                    start_search = post._get_next_working_datetime(start_search)
+
+                    s_dt, e_dt = post.find_available_slot_bounded(
                         start_search,
                         dur_h,
+                        latest_end_dt=we,
                         of_id_to_ignore=of_to_schedule.id + "_" + op_def.operation_name,
                     )
 
-                    if s_dt and e_dt and e_dt.date() > hi_d:
+                    if s_dt and e_dt and e_dt > latest_allowed:
                         s_dt, e_dt = None, None
 
-                if s_dt and e_dt:
-                    op_sched.append((op_def, post, s_dt, e_dt))
-                    last_end = e_dt
-                    if group_last_for_post is None or e_dt > group_last_for_post:
-                        group_post_last_end[post.id] = e_dt
-                else:
-                    feasible = False
-                    if i == 0 and components_ready_dt is not None:
-                        fail_reason = (
-                            "No slot for first op within horizon after components ready at "
-                            f"{components_ready_dt}"
-                        )
-                    else:
-                        fail_reason = (
-                            "No slot in allowed windows within horizon"
-                            if i == 0
-                            else f"No slot for '{op_def.operation_name}' within horizon"
-                        )
+                    if not s_dt or not e_dt:
+                        ok = False
+                        break
+
+                    op_sched_try.append((op_def, post, s_dt, e_dt))
+                    chain_last_end = e_dt
+                    temp_post_end[post.id] = e_dt
+                    start_search = e_dt
+
+                if ok and op_sched_try:
+                    chosen_sched = op_sched_try
+                    chosen_temp_post_end = temp_post_end
                     break
 
-            if feasible and op_sched:
-                for op_def, post, s_dt, e_dt in op_sched:
+            if chosen_sched:
+                for op_def, post, s_dt, e_dt in chosen_sched:
                     post.book_slot(s_dt, e_dt, of_to_schedule.id + "_" + op_def.operation_name)
 
-                start_dt = op_sched[0][2]
-                end_dt = op_sched[-1][3]
+                for pid, enddt in (chosen_temp_post_end or {}).items():
+                    if group_post_last_end.get(pid) is None or enddt > group_post_last_end[pid]:
+                        group_post_last_end[pid] = enddt
+
+                start_dt = chosen_sched[0][2]
+                end_dt = chosen_sched[-1][3]
                 of_to_schedule.scheduled_start_date = start_dt
                 of_to_schedule.scheduled_end_date = end_dt
 
                 start_d = start_dt.date()
-
-                if start_d <= need_d:
+                if start_d <= need_dt.date():
                     statut_calc = "OUI"
-                elif need_d < start_d <= hi_d:
+                elif need_dt.date() < start_d <= latest_allowed.date():
                     statut_calc = "NON"
                 else:
                     statut_calc = "ÉCHOUÉ"
 
-                if statut_calc == "ÉCHOUÉ":
-                    statut_affiche = "NON"
-                else:
-                    statut_affiche = statut_calc
+                statut = "NON" if statut_calc == "ÉCHOUÉ" else statut_calc
+                of_to_schedule.status = statut
 
-                of_to_schedule.status = statut_affiche
-
-                if statut_affiche == "NON":
-                    retard_jours = days_delay_if_late(end_dt, need_dt_for_smoothing)
+                retard_jours = days_delay_if_late(end_dt, need_dt) if statut == "NON" else 0
+                if start_dt and start_dt < need_dt:
+                    avance_jours = (need_dt - start_dt).days
                 else:
-                    retard_jours = 0
+                    avance_jours = 0
 
                 commit_allocations(allocations)
 
-                p_norm = _norm_code_local(of_to_schedule.product_id)
-                qty = float(getattr(of_to_schedule, "quantity", 0) or 0)
+                qty = of_to_schedule.quantity
                 if qty > 0:
-                    production_lots[p_norm].append({"end_dt": end_dt, "qty_free": qty})
-                    production_lots[p_norm] = sorted(
-                        production_lots[p_norm],
-                        key=lambda l: l["end_dt"]
-                    )
+                    production_lots[prod_norm].append({"end_dt": end_dt, "qty_free": qty})
+                    production_lots[prod_norm] = sorted(production_lots[prod_norm], key=lambda l: l["end_dt"])
 
-                smoothing_items.append(
-                    {
-                        "of_id": of_to_schedule.id,
-                        "product_id": of_to_schedule.product_id,
-                        "designation": of_to_schedule.designation,
-                        "group_id": group.id,
-                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
-                        "scheduled_start": dt_to_str(start_dt),
-                        "scheduled_end": dt_to_str(end_dt),
-                        "status": statut_affiche,
-                        "retard_jours": retard_jours,
-                        "operations": [
-                            {
-                                "operation": d[0].operation_name,
-                                "post_id": d[0].post_id,
-                                "start": dt_to_str(d[2]),
-                                "end": dt_to_str(d[3]),
-                            }
-                            for d in op_sched
-                        ],
-                    }
-                )
+                smoothing_items.append({
+                    "of_id": of_to_schedule.id,
+                    "product_id": of_to_schedule.raw_product_id,
+                    "designation": of_to_schedule.designation,
+                    "group_id": group.id,
+                    "qty_besoin": qty_besoin_raw(of_to_schedule),
+                    "need_date": need_dt.strftime("%Y-%m-%d"),
+                    "scheduled_start": dt_to_str(start_dt),
+                    "scheduled_end": dt_to_str(end_dt),
+                    "status": statut,
+                    "retard_jours": retard_jours,
+                    "avance_jours": avance_jours,
+                    "operations": [
+                        {
+                            "operation": d[0].operation_name,
+                            "post_id": d[0].post_id,
+                            "start": dt_to_str(d[2]),
+                            "end": dt_to_str(d[3]),
+                        }
+                        for d in chosen_sched
+                    ],
+                })
             else:
-                status_affiche = "ÉCHOUÉ(poste indispo)"
-                of_to_schedule.status = status_affiche
+                status = "ÉCHOUÉ(poste indispo)"
+                of_to_schedule.status = status
                 of_to_schedule.scheduled_start_date = None
                 of_to_schedule.scheduled_end_date = None
-                smoothing_items.append(
-                    {
-                        "of_id": of_to_schedule.id,
-                        "product_id": of_to_schedule.product_id,
-                        "designation": of_to_schedule.designation,
-                        "group_id": group.id,
-                        "need_date": need_dt_for_smoothing.strftime("%Y-%m-%d"),
-                        "scheduled_start": None,
-                        "scheduled_end": None,
-                        "status": status_affiche,
-                        "retard_jours": 0,
-                        "operations": [],
-                        "debug": fail_reason or "No slot",
-                    }
-                )
+                smoothing_items.append({
+                    "of_id": of_to_schedule.id,
+                    "product_id": of_to_schedule.raw_product_id,
+                    "designation": of_to_schedule.designation,
+                    "group_id": group.id,
+                    "qty_besoin": qty_besoin_raw(of_to_schedule),
+                    "need_date": need_dt.strftime("%Y-%m-%d"),
+                    "scheduled_start": None,
+                    "scheduled_end": None,
+                    "status": status,
+                    "retard_jours": 0,
+                    "avance_jours": 0,
+                    "operations": [],
+                    "debug": fail_reason or "No slot within allowed advance/retard weeks",
+                })
 
             scheduled_ofs.append(of_to_schedule)
+
+    unassigned_ofs = [of for of in all_ofs_with_groups if of.assigned_group_id is None]
+    unassigned_sorted = sorted(unassigned_ofs, key=lambda x: (get_level(x), x.need_date, x.id))
+
+    for unassigned_of in unassigned_sorted:
+        scheduled_of = schedule_single_of(unassigned_of, group_id=None)
+        scheduled_ofs.append(scheduled_of)
 
     final_by_id = {of.id: of for of in scheduled_ofs}
     updated_all = [final_by_id.get(orig.id, orig) for orig in all_ofs_with_groups]
@@ -1320,14 +1517,17 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
     except Exception as e:
         print(f"[Smoothing] JSON write error: {e}")
 
-    ops_excel_path = params.get("smoothing_ops_excel_path")
-    if ops_excel_path:
+    smoothing_csv_path = params.get("smoothing_csv_path")
+    if not smoothing_csv_path:
+        smoothing_csv_path = os.path.join(os.path.dirname(smoothing_json_path), "smoothing_report.csv")
+
+    if smoothing_csv_path:
         try:
-            write_operations_excel_from_smoothing_items(smoothing_items, ops_excel_path)
-            print(f"[Smoothing] Operations Excel written to {ops_excel_path}")
+            write_smoothing_csv(smoothing_items, smoothing_csv_path)
+            print(f"[Smoothing] CSV report written to {smoothing_csv_path}")
         except Exception as e:
-            print(f"[Smoothing] Excel ops write error: {e}")
-    
+            print(f"[Smoothing] CSV report error: {e}")
+
     weekly_capacity_report_path = params.get("weekly_capacity_report_path")
     if weekly_capacity_report_path:
         try:
@@ -1338,6 +1538,10 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
 
     return updated_all
 
+
+# ============================================================================
+# OUTPUT WRITERS
+# ============================================================================
 
 def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
     from collections import defaultdict
@@ -1361,19 +1565,14 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
     ]
 
     def get_bom_level(of_obj):
-        try:
-            return int(getattr(of_obj, "effective_bom_level", 0))
-        except Exception:
-            return 0
-
-    def _norm(x: str) -> str:
-        return "".join(str(x or "").replace("\ufeff", "").split()).upper()
+        return getattr(of_obj, "effective_bom_level", 0)
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter="\t")
         writer.writerow(output_header)
 
-        processed_of_ids_in_groups = set()
+        ofs_by_id = {of.id: of for of in all_ofs_scheduled}
+        grouped_ids = set()
 
         def extract_group_number(group):
             try:
@@ -1383,7 +1582,7 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
 
         for group in sorted(grouped_list_data, key=extract_group_number):
             f.write(f"\n# Group ID: {group.id}\n")
-            f.write(f"#   Produit PS Principal (ancre): {group.ps_product_id}\n")
+            f.write(f"#   Produit PS Principal (ancre): {group.raw_ps_product_id}\n")
             f.write(
                 f"#   Fenêtre Temporelle: "
                 f"{group.time_window_start.strftime('%Y-%m-%d')} à "
@@ -1391,33 +1590,28 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             )
 
             product_norm_to_raw = {}
-
-            ofs_in_group = [of for of in all_ofs_scheduled if of.assigned_group_id == group.id]
-            for of in ofs_in_group:
-                pn = _norm(of.product_id)
-                if pn and pn not in product_norm_to_raw:
-                    product_norm_to_raw[pn] = of.product_id
+            ofs_in_group = []
+            for of in group.ofs:
+                ofs_in_group.append(of)
+                grouped_ids.add(of.id)
+                pn = of.product_id
+                if pn not in product_norm_to_raw:
+                    product_norm_to_raw[pn] = of.raw_product_id
 
             if hasattr(group, "individual_product_stocks") and group.ps_product_id in group.individual_product_stocks:
-                f.write(
-                    f"#   Stock PS Calculé: "
-                    f"{group.individual_product_stocks[group.ps_product_id]}\n"
-                )
+                f.write(f"#   Stock PS Calculé: {group.individual_product_stocks[group.ps_product_id]}\n")
             else:
                 f.write("#   Stock PS: Non calculé / Ancre composant\n")
 
             product_totals = defaultdict(lambda: {"demande": 0.0, "produit": 0.0})
-
             for of in ofs_in_group:
-                pn = _norm(of.product_id)
-                q_dem = float(getattr(of, "quantity", 0) or 0)
-                q_prod = float(getattr(of, "individual_product_stock", 0.0) or 0.0)
+                pn = of.product_id
+                q_dem = of.quantity
+                q_prod = of.individual_product_stock
                 product_totals[pn]["demande"] += q_dem
                 product_totals[pn]["produit"] += q_prod
 
-            pf_norms = sorted(
-                {_norm(of.product_id) for of in ofs_in_group if getattr(of, "product_type", "") == "PF"}
-            )
+            pf_norms = sorted({of.product_id for of in ofs_in_group if of.product_type == "PF"})
 
             f.write("#   PF produits dans le groupe (quantité produite vs demandée):\n")
             if not pf_norms:
@@ -1438,10 +1632,7 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
             else:
                 f.write("#     Stock non calculé.\n")
 
-            ofs_in_group_sorted = sorted(
-                ofs_in_group,
-                key=lambda x: (get_bom_level(x), x.need_date, x.product_id),
-            )
+            ofs_in_group_sorted = sorted(ofs_in_group, key=lambda x: (get_bom_level(x), x.need_date, x.product_id))
 
             for of_obj in ofs_in_group_sorted:
                 desc_parts = of_obj.designation.split()
@@ -1455,30 +1646,19 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                     processed_description = f"{desc_parts[0]} {desc_parts[1]}"
 
                 processed_order_code = of_obj.id
-                grp_flg = (
-                    of_obj.assigned_group_id.replace("GRP", "")
-                    if of_obj.assigned_group_id
-                    else ""
-                )
-                start_date_str = (
-                    of_obj.scheduled_start_date.strftime("%Y-%m-%d")
-                    if of_obj.scheduled_start_date
-                    else ""
-                )
+                grp_flg = group.id.replace("GRP", "")
+                start_date_str = of_obj.scheduled_start_date.strftime("%Y-%m-%d") if of_obj.scheduled_start_date else ""
+
                 delay_val = "0"
-                if getattr(of_obj, "status", "") == "NON" and of_obj.scheduled_end_date and of_obj.need_date:
+                if of_obj.status == "NON" and of_obj.scheduled_end_date and of_obj.need_date:
                     delay_days = (of_obj.scheduled_end_date - of_obj.need_date).days
                     delay_val = str(max(0, delay_days))
 
-                stock_val = getattr(of_obj, "individual_product_stock", None)
-                if stock_val is None:
-                    stock_val = getattr(of_obj, "remaining_stock", None)
-                if stock_val is None:
-                    stock_val = float(getattr(of_obj, "quantity", 0.0) or 0.0)
+                stock_val = of_obj.individual_product_stock if of_obj.individual_product_stock is not None else of_obj.quantity
 
                 writer.writerow(
                     [
-                        of_obj.product_id,
+                        of_obj.raw_product_id,
                         processed_description,
                         processed_order_code,
                         of_obj.fg,
@@ -1486,112 +1666,160 @@ def write_grouped_needs_to_file(filepath, grouped_list_data, all_ofs_scheduled):
                         of_obj.us,
                         of_obj.fs,
                         of_obj.quantity,
-                        of_obj.need_date.strftime("%Y-%m-%d")
-                        if of_obj.need_date
-                        else "",
+                        of_obj.need_date.strftime("%Y-%m-%d") if of_obj.need_date else "",
                         grp_flg,
                         start_date_str,
                         delay_val,
                         stock_val,
                     ]
                 )
-                processed_of_ids_in_groups.add(of_obj.id)
 
-        f.write("\n# OFs Non Affectés:\n")
-        unassigned = [of for of in all_ofs_scheduled if of.id not in processed_of_ids_in_groups]
+        unassigned = [of for of in all_ofs_scheduled if of.id not in grouped_ids]
+        if unassigned:
+            f.write("\n# OFs Non Affectés:\n")
+            unassigned_sorted = sorted(unassigned, key=lambda x: (get_bom_level(x), x.need_date, x.id))
+            for of_obj in unassigned_sorted:
+                desc_parts = of_obj.designation.split()
+                if not desc_parts:
+                    processed_description = ""
+                elif len(desc_parts) >= 2 and desc_parts[0].upper() == "BATENS":
+                    processed_description = f"{desc_parts[0]} {desc_parts[1]}"
+                elif len(desc_parts) == 1:
+                    processed_description = desc_parts[0]
+                else:
+                    processed_description = f"{desc_parts[0]} {desc_parts[1]}"
 
-        unassigned_sorted = sorted(
-            unassigned,
-            key=lambda x: (get_bom_level(x), x.need_date, x.id),
-        )
+                processed_order_code = of_obj.id[:10] if len(of_obj.id) > 10 else of_obj.id
+                grp_flg = ""
+                start_date_str = of_obj.scheduled_start_date.strftime("%Y-%m-%d") if of_obj.scheduled_start_date else ""
 
-        for of_obj in unassigned_sorted:
-            desc_parts = of_obj.designation.split()
-            if not desc_parts:
-                processed_description = ""
-            elif len(desc_parts) >= 2 and desc_parts[0].upper() == "BATENS":
-                processed_description = f"{desc_parts[0]} {desc_parts[1]}"
-            elif len(desc_parts) == 1:
-                processed_description = desc_parts[0]
-            else:
-                processed_description = f"{desc_parts[0]} {desc_parts[1]}"
+                delay_val = "0"
+                if of_obj.status == "NON" and of_obj.scheduled_end_date and of_obj.need_date:
+                    delay_days = (of_obj.scheduled_end_date - of_obj.need_date).days
+                    delay_val = str(max(0, delay_days))
 
-            processed_order_code = of_obj.id[:10]
-            grp_flg = (
-                of_obj.assigned_group_id.replace("GRP", "")
-                if of_obj.assigned_group_id
-                else ""
-            )
-            start_date_str = (
-                of_obj.scheduled_start_date.strftime("%Y-%m-%d")
-                if of_obj.scheduled_start_date
-                else ""
-            )
-            delay_val = "0"
-            if getattr(of_obj, "status", "") == "NON" and of_obj.scheduled_end_date and of_obj.need_date:
-                delay_days = (of_obj.scheduled_end_date - of_obj.need_date).days
-                delay_val = str(max(0, delay_days))
+                stock_val = of_obj.individual_product_stock if of_obj.individual_product_stock is not None else of_obj.quantity
 
-            stock_val = getattr(of_obj, "individual_product_stock", None)
-            if stock_val is None:
-                stock_val = getattr(of_obj, "remaining_stock", None)
-            if stock_val is None:
-                stock_val = float(getattr(of_obj, "quantity", 0.0) or 0.0)
+                writer.writerow(
+                    [
+                        of_obj.raw_product_id,
+                        processed_description,
+                        processed_order_code,
+                        of_obj.fg,
+                        of_obj.cat,
+                        of_obj.us,
+                        of_obj.fs,
+                        int(of_obj.quantity) if isinstance(of_obj.quantity, (int, float)) else of_obj.quantity,
+                        of_obj.need_date.strftime("%Y-%m-%d") if of_obj.need_date else "",
+                        grp_flg,
+                        start_date_str,
+                        delay_val,
+                        stock_val,
+                    ]
+                )
 
-            writer.writerow(
-                [
-                    of_obj.product_id,
-                    processed_description,
-                    processed_order_code,
-                    of_obj.fg,
-                    of_obj.cat,
-                    of_obj.us,
-                    of_obj.fs,
-                    int(of_obj.quantity),
-                    of_obj.need_date.strftime("%Y-%m-%d")
-                    if of_obj.need_date
-                    else "",
-                    grp_flg,
-                    start_date_str,
-                    delay_val,
-                    stock_val,
-                ]
-            )
-
-    print(f"Output written to {filepath}.")
+    print(f"Output written to {filepath}. Total OFs: {len(all_ofs_scheduled)}, Groupés: {len(grouped_ids)}, Non affectés: {len(unassigned)}")
 
 
-def write_smoothing_view_json(items, json_path):
-    payload = {"generated_at": datetime.now().isoformat(timespec="seconds"), "items": items}
-    os.makedirs(os.path.dirname(json_path), exist_ok=True)
-    with open(json_path, "w", encoding="utf-8") as f:
-        import json as _json
-
-        _json.dump(payload, f, ensure_ascii=False, indent=2)
-
-
-def write_operations_excel_from_smoothing_items(smoothing_items, output_filepath):
+def write_smoothing_csv(smoothing_items, output_filepath):
     import csv
     import os
-
     os.makedirs(os.path.dirname(output_filepath), exist_ok=True)
 
-    header = ["OF", "Poste", "Date Début", "Date Fin"]
+    header = ["Groupe", "OF", "Date de besoin", "Statut"]
+    with open(output_filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f, delimiter=";")
+        writer.writerow(header)
+        for item in smoothing_items:
+            group_id = item.get("group_id", "INDIVIDUEL")
+            of_id = item.get("of_id", "")
+            need_date = item.get("need_date", "")
+            status = item.get("status", "")
+            if need_date and " " in need_date:
+                need_date = need_date.split(" ")[0]
+            writer.writerow([group_id, of_id, need_date, status])
+    print(f"✅ Fichier CSV du lissage généré (ordre original conservé) : {output_filepath}")
+
+
+def write_posts_weekly_capacity_report(posts_map, output_filepath):
+    import csv
+    import os
+    from datetime import datetime, timedelta, time
+
+    folder = os.path.dirname(output_filepath)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
+
+    header = [
+        "PostID",
+        "PostName",
+        "Goulot",
+        "WeekIndex",
+        "WeekStartDate",
+        "WeekEndDate",
+        "AllowedHours",
+        "PlannedHours",
+        "DeltaHours",
+        "RespectCapacity",
+    ]
 
     with open(output_filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter=";")
         writer.writerow(header)
 
-        for item in smoothing_items:
-            of_id = item.get("of_id", "")
-            for op in item.get("operations", []):
-                writer.writerow([
-                    of_id,
-                    op.get("post_id", ""),
-                    op.get("start", ""),
-                    op.get("end", ""),
-                ])
+        for post in posts_map.values():
+            base = getattr(post, "planning_start_monday", None)
+            if base is None:
+                continue
 
+            is_bottleneck = bool(getattr(post, "is_bottleneck", True))
+            goulot_val = 1 if is_bottleneck else 0
+
+            for wk_index, planned in sorted(post.weekly_load_hours.items()):
+                week_start = base + timedelta(days=7 * (wk_index - 1))
+                week_end = week_start + timedelta(days=6)
+
+                if not is_bottleneck:
+                    writer.writerow(
+                        [
+                            post.id,
+                            post.name,
+                            goulot_val,
+                            wk_index,
+                            week_start.strftime("%Y-%m-%d"),
+                            week_end.strftime("%Y-%m-%d"),
+                            "INF",
+                            round(float(planned), 2),
+                            "",
+                            "N/A",
+                        ]
+                    )
+                    continue
+
+                dt_for_wk = datetime.combine(week_start, time.min)
+                allowed = float(post._allowed_hours_for_week(dt_for_wk))
+                delta = allowed - float(planned)
+                respect = "OUI" if planned <= allowed + 1e-6 else "NON"
+
+                writer.writerow(
+                    [
+                        post.id,
+                        post.name,
+                        goulot_val,
+                        wk_index,
+                        week_start.strftime("%Y-%m-%d"),
+                        week_end.strftime("%Y-%m-%d"),
+                        round(allowed, 2),
+                        round(float(planned), 2),
+                        round(delta, 2),
+                        respect,
+                    ]
+                )
+
+
+# ============================================================================
+# LOADERS 
+# ============================================================================
 
 def load_ofs_from_file(filepath):
     print(f"Loading OFs from {filepath}")
@@ -1605,6 +1833,9 @@ def load_ofs_from_file(filepath):
         "fg": ["fg"],
         "cat us fs": ["cat us fs", "cat/us/fs", "cat_us_fs", "catusfs"],
         "qty": ["qty", "quantite", "quantity", "qte"],
+        "horizon": ["horizon", "horizon (weeks)", "horizon_weeks", "fenetre", "window"],
+        "retard": ["retard", "delay", "advance_retreat", "advance_retreat_weeks", "retard_weeks"],
+        "avance": ["avance", "advance", "advance weeks", "avance (weeks)"],
     }
 
     required = ["Part", "Description", "Order Code", "FG", "CAT US FS", "Qty", "Date"]
@@ -1622,11 +1853,32 @@ def load_ofs_from_file(filepath):
             if not hit:
                 return None
             out[want] = hit
+
+        h_hit = None
+        for k in ["Horizon"] + ALIASES.get("horizon", []):
+            if k.lower() in lower:
+                h_hit = lower[k.lower()]
+                break
+        out["_HORIZON_OPT_"] = h_hit
+
+        r_hit = None
+        for k in ["Retard"] + ALIASES.get("retard", []):
+            if k.lower() in lower:
+                r_hit = lower[k.lower()]
+                break
+        out["_RETARD_OPT_"] = r_hit
+
+        #recherche colonne Avance
+        a_hit = None
+        for k in ["Avance"] + ALIASES.get("avance", []):
+            if k.lower() in lower:
+                a_hit = lower[k.lower()]
+                break
+        out["_AVANCE_OPT_"] = a_hit
+
         return out
 
-    f, reader, used_delim, used_enc = _make_reader(
-        filepath, required_cols=None, fallback="\t"
-    )
+    f, reader, used_delim, used_enc = _make_reader(filepath, required_cols=None, fallback="\t")
     if not reader or not reader.fieldnames:
         print(f"Warning: CSV file {filepath} appears empty or header missing.")
         if f:
@@ -1638,8 +1890,7 @@ def load_ofs_from_file(filepath):
         if f:
             f.close()
         raise ValueError(
-            f"CSV file {filepath} missing required columns: {['Date']}. "
-            f"Found: {reader.fieldnames}"
+            f"CSV file {filepath} missing required columns. Found: {reader.fieldnames}"
         )
 
     try:
@@ -1667,6 +1918,22 @@ def load_ofs_from_file(filepath):
 
                 bom_level_derived = 0
 
+                horizon_val = None
+                h_col = mapped_cols.get("_HORIZON_OPT_")
+                if h_col:
+                    horizon_val = row.get(h_col)
+
+                retard_val = None
+                r_col = mapped_cols.get("_RETARD_OPT_")
+                if r_col:
+                    retard_val = row.get(r_col)
+
+                #lecture de la colonne Avance
+                advance_val = None
+                a_col = mapped_cols.get("_AVANCE_OPT_")
+                if a_col:
+                    advance_val = row.get(a_col)
+
                 of = ManufacturingOrder(
                     id=row[mapped_cols["Order Code"]],
                     designation=row[mapped_cols["Description"]],
@@ -1679,6 +1946,9 @@ def load_ofs_from_file(filepath):
                     cat=cat_val,
                     us=us_val,
                     fs=fs_val,
+                    horizon_weeks=horizon_val,
+                    retard_weeks=retard_val,
+                    advance_weeks=advance_val,
                 )
                 ofs.append(of)
             except Exception as e:
@@ -1695,22 +1965,12 @@ def load_bom_from_file(filepath):
     print(f"Loading BOM from {filepath}")
     bom_entries = []
 
-    required_cols = [
-        "ParentProductID",
-        "ChildProductID",
-        "QuantityChildPerParent",
-        "ChildBOMLevel",
-    ]
+    required_cols = ["ParentProductID", "ChildProductID", "QuantityChildPerParent", "ChildBOMLevel"]
 
     aliases = {
         "ParentProductID": ["parentproductid", "parent", "parent id", "id parent"],
         "ChildProductID": ["childproductid", "child", "child id", "id child"],
-        "QuantityChildPerParent": [
-            "quantitychildperparent",
-            "qty/parent",
-            "qty_per_parent",
-            "qte/parent",
-        ],
+        "QuantityChildPerParent": ["quantitychildperparent", "qty/parent", "qty_per_parent", "qte/parent"],
         "ChildBOMLevel": ["childbomlevel", "child level", "niveau enfant", "level"],
         "ParentBOMLevel": ["parentbomlevel", "parent level", "niveau parent"],
     }
@@ -1730,9 +1990,7 @@ def load_bom_from_file(filepath):
             out[want] = hit
         return out
 
-    f, reader, used_delim, used_enc = _make_reader(
-        filepath, required_cols=None, fallback=","
-    )
+    f, reader, used_delim, used_enc = _make_reader(filepath, required_cols=None, fallback=",")
     if not reader or not reader.fieldnames:
         print(f"Error: BOM file not found at {filepath}. Returning empty list.")
         if f:
@@ -1788,18 +2046,13 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
     posts_map = {}
 
     try:
-        required_cols_posts = ["PostID", "PostName", "DefaultCapacityHoursWeek"]
+        required_cols_posts = ["PostID", "PostName"]
 
         f_posts, reader_posts, used_delim_posts, used_enc_posts = _make_reader(
-            filepath_posts,
-            required_cols=None,
-            fallback=",",
+            filepath_posts, required_cols=None, fallback=","
         )
-
         if not reader_posts or not reader_posts.fieldnames:
-            raise FileNotFoundError(
-                f"Posts CSV {filepath_posts} appears empty or has no header."
-            )
+            raise FileNotFoundError(f"Posts CSV {filepath_posts} appears empty or has no header.")
 
         lower = {c.strip().lower(): c.strip() for c in reader_posts.fieldnames}
         colmap_posts = {}
@@ -1812,6 +2065,20 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
                     f"Found: {reader_posts.fieldnames}"
                 )
 
+        goulot_col = None
+        for c in reader_posts.fieldnames:
+            if c.strip().lower().replace(" ", "") in ("goulot", "bottleneck"):
+                goulot_col = c.strip()
+                break
+
+        def parse_goulot(v):
+            s = str(v or "").strip().lower()
+            if s in ("1", "oui", "true", "yes", "y"):
+                return True
+            if s in ("0", "non", "false", "no", "n"):
+                return False
+            return True
+
         week_cols = {}
         for col in reader_posts.fieldnames:
             key_norm = col.strip().lower().replace(" ", "")
@@ -1820,16 +2087,12 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
                 week_index = int(m.group(1))
                 week_cols[week_index] = col.strip()
 
+        if not week_cols:
+            print("[WARN] Aucun champ WeekX trouvé dans posts CSV. Les goulots auront 0h partout => échec planification.")
+
         for row in reader_posts:
             raw_pid = row[colmap_posts["PostID"]]
             pid = norm_code(raw_pid)
-
-            try:
-                default_week_capacity = float(
-                    try_parse_float(row[colmap_posts["DefaultCapacityHoursWeek"]])
-                )
-            except Exception:
-                default_week_capacity = float(POST_DEFAULT_CAPACITY_HOURS_WEEK)
 
             weekly_capacity_by_week = {}
             for wk_index, colname in week_cols.items():
@@ -1844,11 +2107,15 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
                 except Exception:
                     continue
 
+            is_bottleneck = True
+            if goulot_col is not None:
+                is_bottleneck = parse_goulot(row.get(goulot_col, "1"))
+
             post = Post(
                 id=pid,
                 name=row[colmap_posts["PostName"]],
-                default_capacity_hours_week=default_week_capacity,
                 weekly_capacity_by_week=weekly_capacity_by_week,
+                is_bottleneck=is_bottleneck,
             )
             posts_map[post.id] = post
 
@@ -1868,9 +2135,7 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
     try:
         if filepath_post_unavailability and os.path.isfile(filepath_post_unavailability):
             f_unav, reader_unav, used_delim_unav, used_enc_unav = _make_reader(
-                filepath_post_unavailability,
-                required_cols=None,
-                fallback=",",
+                filepath_post_unavailability, required_cols=None, fallback=","
             )
             if reader_unav and reader_unav.fieldnames:
                 required_cols_unavail = ["PostID", "UnavailableStartDate", "UnavailableEndDate"]
@@ -1903,16 +2168,9 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
 
     operations_map = defaultdict(list)
     try:
-        f_ops, reader_ops, used_delim_ops, used_enc_ops = _make_reader(
-            filepath_operations,
-            required_cols=None,
-            fallback=",",
-        )
-
+        f_ops, reader_ops, used_delim_ops, used_enc_ops = _make_reader(filepath_operations, required_cols=None, fallback=",")
         if not reader_ops or not reader_ops.fieldnames:
-            raise FileNotFoundError(
-                f"Operations file {filepath_operations} appears empty or has no header."
-            )
+            raise FileNotFoundError(f"Operations file {filepath_operations} appears empty or has no header.")
 
         aliases_ops = {
             "ProductID": ["productid", "product id", "ofid"],
@@ -1934,9 +2192,7 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
                     hit = lower_ops[k.lower()]
                     break
             if not hit:
-                raise ValueError(
-                    f"Column '{wanted}' not found in operations file. Found: {reader_ops.fieldnames}"
-                )
+                raise ValueError(f"Column '{wanted}' not found in operations file. Found: {reader_ops.fieldnames}")
             colmap_ops[wanted] = hit
 
         for row in reader_ops:
@@ -1945,8 +2201,7 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
             if key == "UNKNOWN_OP_KEY" or not key:
                 continue
 
-            raw_post_id = row.get(colmap_ops["PostID"], "")
-            post_id_norm = norm_code(raw_post_id)
+            post_id_norm = norm_code(row.get(colmap_ops["PostID"], ""))
 
             seq_str = row.get(colmap_ops["Sequence"], "0") or "0"
             pri_str = row.get(colmap_ops["Priority"], "1") or "1"
@@ -1969,10 +2224,7 @@ def load_posts_and_operations_data(filepath_posts, filepath_post_unavailability,
     except Exception as e:
         print(f"Error loading Operations from {filepath_operations}: {e}")
 
-    print(
-        f"Loaded {len(posts_map)} posts and "
-        f"{sum(len(ops) for ops in operations_map.values())} operation rules."
-    )
+    print(f"Loaded {len(posts_map)} posts and {sum(len(ops) for ops in operations_map.values())} operation rules.")
     return posts_map, operations_map
 
 
@@ -2011,6 +2263,7 @@ def load_compact_input_file(filepath):
                             bom_level = int(cat) if cat else 0
                         except ValueError:
                             bom_level = 0
+                        
                         ofs_list.append(
                             ManufacturingOrder(
                                 id=of_id,
@@ -2024,6 +2277,7 @@ def load_compact_input_file(filepath):
                                 cat=cat,
                                 us=us,
                                 fs=fs,
+                                advance_weeks=None,   
                             )
                         )
                     elif tag == "BOM":
@@ -2054,59 +2308,9 @@ def load_compact_input_file(filepath):
     return ofs_list, bom_list
 
 
-def write_posts_weekly_capacity_report(posts_map, output_filepath):
-    """Rapport capacité/charge par poste et par semaine."""
-    import csv
-    import os
-    from datetime import datetime, timedelta, time
-
-    folder = os.path.dirname(output_filepath)
-    if folder:
-        os.makedirs(folder, exist_ok=True)
-
-    header = [
-        "PostID",
-        "PostName",
-        "WeekIndex",
-        "WeekStartDate",
-        "WeekEndDate",
-        "AllowedHours",
-        "PlannedHours",
-        "DeltaHours",
-        "RespectCapacity",
-    ]
-
-    with open(output_filepath, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f, delimiter=";")
-        writer.writerow(header)
-
-        for post in posts_map.values():
-            base = getattr(post, "planning_start_monday", None)
-            if base is None:
-                continue
-
-            for wk_index, planned in sorted(post.weekly_load_hours.items()):
-                week_start = base + timedelta(days=7 * (wk_index - 1))
-                week_end = week_start + timedelta(days=6)
-
-                dt_for_wk = datetime.combine(week_start, time.min)
-                allowed = float(post._allowed_hours_for_week(dt_for_wk))
-
-                delta = allowed - float(planned)
-                respect = "OUI" if planned <= allowed + 1e-6 else "NON"
-
-                writer.writerow([
-                    post.id,
-                    post.name,
-                    wk_index,
-                    week_start.strftime("%Y-%m-%d"),
-                    week_end.strftime("%Y-%m-%d"),
-                    round(allowed, 2),
-                    round(planned, 2),
-                    round(delta, 2),
-                    respect,
-                ])
-
+# ============================================================================
+# MAIN
+# ============================================================================
 
 if __name__ == "__main__":
     compact_file = "input_compact.txt"
@@ -2125,11 +2329,7 @@ if __name__ == "__main__":
         all_ofs = load_ofs_from_file(ofs_file)
         bom_data = load_bom_from_file(bom_file)
 
-    posts_map, operations_map = load_posts_and_operations_data(
-        posts_file,
-        post_unavailability_file,
-        operations_file
-    )
+    posts_map, operations_map = load_posts_and_operations_data(posts_file, post_unavailability_file, operations_file)
 
     print(f"[DEBUG] Nb posts: {len(posts_map)}")
     print(f"[DEBUG] Nb clés opérations: {len(operations_map)}")
@@ -2137,25 +2337,13 @@ if __name__ == "__main__":
 
     params = {
         "advance_retreat_weeks": ADVANCE_RETREAT_WEEKS,
-        # "smoothing_json_path": "uploads/smoothing_view.json",
-        # "smoothing_ops_excel_path": "uploads/smoothing_ops.csv",
         "weekly_capacity_report_path": "uploads/weekly_capacity_report.csv",
+        "smoothing_csv_path": "uploads/smoothing_report.csv",
     }
 
-    groups, all_ofs_with_groups = run_grouping_algorithm(
-        all_ofs,
-        bom_data,
-        HORIZON_H_WEEKS
-    )
+    groups, all_ofs_with_groups = run_grouping_algorithm(all_ofs, bom_data, HORIZON_H_WEEKS)
 
-    all_ofs_scheduled = smooth_and_schedule_groups(
-        groups,
-        all_ofs_with_groups,
-        bom_data,
-        posts_map,
-        operations_map,
-        params
-    )
+    all_ofs_scheduled = smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map, operations_map, params)
 
     write_grouped_needs_to_file(output_file, groups, all_ofs_scheduled)
     print(f"\nDone -> {output_file}")

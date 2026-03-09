@@ -39,7 +39,6 @@ def parse_output_file(file_path):
         for line in lines:
             line = line.strip()
 
-            # Début d'un groupe
             if 'Group ID:' in line:
                 if current_group:
                     groups.append(current_group)
@@ -56,7 +55,6 @@ def parse_output_file(file_path):
                 in_calculated_stocks = False
                 continue
 
-            # Infos du groupe
             if in_group and current_group:
                 if 'Produit PS Principal' in line and ':' in line:
                     current_group['ps_product'] = line.split(':', 1)[1].strip().replace('#', '').strip()
@@ -79,7 +77,6 @@ def parse_output_file(file_path):
                 elif line.startswith('#') and 'OFs dans ce Groupe:' in line:
                     in_calculated_stocks = False
 
-            # Section OFs non affectés
             if 'OFs Non Affectés' in line:
                 if current_group:
                     groups.append(current_group)
@@ -89,7 +86,6 @@ def parse_output_file(file_path):
                 in_calculated_stocks = False
                 continue
 
-            # Lignes d'OFs
             if '\t' in line and not line.startswith('#') and line.count('\t') >= 12:
                 parts = line.split('\t')
 
@@ -113,53 +109,20 @@ def parse_output_file(file_path):
                         'remaining_stock': parts[12] if len(parts) > 12 else 'N/A'
                     }
 
-                    if in_unassigned or not of_data.get('GRP_FLG'):
+                    if in_unassigned or not of_data.get('GRP_FLG') or of_data.get('GRP_FLG') == 'INDIVIDUEL':
                         of_data['Statut'] = 'Non affecté'
-                    else:
-                        of_data['Statut'] = 'Affecté'
-
-                    if in_unassigned or not of_data.get('GRP_FLG'):
                         unassigned_ofs.append(of_data)
                     elif current_group:
+                        of_data['Statut'] = 'Affecté'
                         current_group['ofs'].append(of_data)
 
         if current_group:
             groups.append(current_group)
 
-        groups_with_supply = []
-        groups_without_supply = []
-
-        for group in groups:
-            ofs_in_group = group.get('ofs', [])
-            ps_product = (group.get('ps_product') or '').strip()
-
-            supply_present = False
-            if ps_product:
-                supply_present = any((of.get('Part') or '').strip() == ps_product for of in ofs_in_group)
-
-            if not supply_present:
-                supply_present = any((of.get('Part') or '').startswith('PS') for of in ofs_in_group)
-
-            group['has_supply'] = supply_present
-            group['has_ps'] = supply_present
-
-            if supply_present:
-                groups_with_supply.append(group)
-            else:
-                groups_without_supply.append(group)
-
-        groups_for_display = groups_with_supply if groups_with_supply else groups
-        truly_unassigned_ofs = list(unassigned_ofs)
-
-        non_productible_ofs_in_groups = []
-        for group in groups_without_supply:
-            for of in group.get('ofs', []):
-                non_productible_ofs_in_groups.append(of)
-
         return {
-            'groups': groups_for_display,
-            'unassigned_ofs': truly_unassigned_ofs,
-            'non_productible_ofs_in_groups': non_productible_ofs_in_groups
+            'groups': groups,
+            'unassigned_ofs': unassigned_ofs,
+            'non_productible_ofs_in_groups': []
         }
 
     except Exception as e:
@@ -169,55 +132,6 @@ def parse_output_file(file_path):
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-
-def build_planning_sections(parsed_data):
-    """Construit les sections pour la page planning."""
-    def row_from_of(of):
-        part = (of.get('Part') or '').strip()
-        order_code = (of.get('Order_Code') or '').strip()
-        qty = (of.get('Qty') or '').strip()
-        need = (of.get('X3_Date') or '').strip()
-        start = (of.get('Start_Date') or '').strip()
-        delay = (of.get('Delay') or '').strip()
-        try:
-            delay_int = int(str(delay).strip() or "0")
-        except:
-            delay_int = 0
-        statut = "OUI" if start and delay_int == 0 else "NON"
-        return {
-            "article": part,
-            "num_order": order_code,
-            "qte_lance": qty,
-            "date_besoin": need,
-            "date_proposee": start or "—",
-            "statut_faisable": statut,
-            "retard": str(delay_int),
-        }
-
-    sections = []
-
-    for g in parsed_data.get('groups', []):
-        gid = (g.get('id') or '').strip()
-        ps = (g.get('ps_product') or '—').strip()
-        window = (g.get('time_window') or '—').replace('à', '→')
-        rows = [row_from_of(of) for of in g.get('ofs', [])]
-        rows.sort(key=lambda r: (r["date_besoin"], r["num_order"]))
-        sections.append({
-            "title": f"Groupe {gid}",
-            "subtitle": f"PS: {ps}  |  Fenêtre: {window}",
-            "rows": rows
-        })
-
-    unassigned = [row_from_of(of) for of in parsed_data.get('unassigned_ofs', [])]
-    unassigned.sort(key=lambda r: (r["date_besoin"], r["num_order"]))
-    sections.append({
-        "title": "Non affectés",
-        "subtitle": "OF hors groupe",
-        "rows": unassigned
-    })
-
-    return sections
 
 
 @app.route("/planning")
@@ -235,7 +149,7 @@ def planning_page():
         print(f"[planning] cannot read {path}: {e}")
 
     for r in rows:
-        r.setdefault("group_id", "Hors groupe")
+        r.setdefault("group_id", "INDIVIDUEL")
         r.setdefault("product_id", "")
         r.setdefault("designation", "")
         r.setdefault("need_date", "")
@@ -333,7 +247,8 @@ def index():
             'auto_mode': request.form.get('auto_mode', 'True').lower() == 'true',
             'advance_retreat_weeks': smoothing_horizon_weeks_val,
             'smoothing_json_path': os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_view.json'),
-            'smoothing_ops_excel_path': "uploads/smoothing_operations.csv",
+            'smoothing_ops_excel_path': os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_operations.csv'),
+            'smoothing_csv_path': os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_report.csv'),
             'weekly_capacity_report_path': os.path.join(app.config['UPLOAD_FOLDER'], 'weekly_capacity_report.csv')
         }
 
@@ -646,5 +561,3 @@ if __name__ == '__main__':
     print("🌐 Interface accessible sur : http://localhost:5000")
     print("⏹️  Appuyez sur Ctrl+C pour arrêter")
     app.run(host="127.0.0.1", port=5000, debug=True)
-    # from waitress import serve
-    # serve(app, host="0.0.0.0", port=5002)
