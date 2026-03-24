@@ -13,7 +13,7 @@ from functools import lru_cache
 
 HORIZON_H_MONTHS = 2
 HORIZON_H_WEEKS = 10
-ADVANCE_RETREAT_WEEKS = 3          # Valeur par défaut si colonnes non renseignées
+ADVANCE_RETREAT_WEEKS = 3          
 ENCODING_CANDIDATES = ("utf-8-sig", "cp1252", "latin-1", "utf-8")
 
 # ============================================================================
@@ -602,17 +602,33 @@ class Post:
         last_end = datetime.combine(last_monday + timedelta(days=7), time.min)
         return max(search_start_dt_param + timedelta(days=1), last_end)
 
-    def find_available_slot(self, search_start_dt_param: datetime, duration_hours: float, of_id_to_ignore=None):
+    def find_available_slot(self, search_start_dt_param: datetime, duration_hours: float,
+                            of_id_to_ignore=None, reasons=None):
+        """
+        Cherche un créneau disponible.
+        """
         current_try_start_dt = self._get_next_working_datetime(search_start_dt_param)
         max_search_datetime = self._search_limit_datetime(search_start_dt_param)
 
         while current_try_start_dt < max_search_datetime:
             potential_end_dt = self.calculate_end_datetime(current_try_start_dt, duration_hours)
             if potential_end_dt == datetime.max:
+                if reasons is not None:
+                    reasons.append(f"Le calcul de fin a échoué (boucle infinie) à partir de {current_try_start_dt}")
                 current_try_start_dt = self._get_next_working_datetime(current_try_start_dt + timedelta(days=1))
                 continue
 
+            # Vérification capacité hebdomadaire
             if not self._can_add_slot_in_week(current_try_start_dt, potential_end_dt):
+                wk = self._week_key(current_try_start_dt)
+                allowed = self._allowed_hours_for_week(current_try_start_dt)
+                used = self.weekly_load_hours[wk]
+                # On calcule les heures supplémentaires approximatives
+                dist = self._weekly_hours_distribution(current_try_start_dt, potential_end_dt)
+                add_hours = dist.get(wk, 0)
+                if reasons is not None:
+                    reasons.append(f"Dépassement capacité semaine {wk}: déjà {used:.2f}h, ajout {add_hours:.2f}h, max {allowed:.2f}h")
+                # Passer à la semaine suivante
                 days_to_next_monday = (7 - current_try_start_dt.weekday()) % 7
                 if days_to_next_monday == 0:
                     days_to_next_monday = 7
@@ -620,17 +636,77 @@ class Post:
                 current_try_start_dt = self._get_next_working_datetime(next_week_monday)
                 continue
 
+            # Vérification chevauchement
             is_overlap = False
             for booked_start, booked_end, booked_of_id in self.scheduled_slots:
                 if of_id_to_ignore and booked_of_id == of_id_to_ignore:
                     continue
                 if current_try_start_dt < booked_end and potential_end_dt > booked_start:
                     is_overlap = True
+                    if reasons is not None:
+                        reasons.append(f"Chevauchement avec OF {booked_of_id} (réservé {booked_start}–{booked_end})")
                     current_try_start_dt = self._get_next_working_datetime(booked_end)
                     break
+            if is_overlap:
+                continue
 
-            if not is_overlap:
-                return current_try_start_dt, potential_end_dt
+            # Aucun problème
+            return current_try_start_dt, potential_end_dt
+
+        return None, None
+
+    def find_available_slot_bounded(self, search_start_dt_param: datetime, duration_hours: float,
+                                    latest_end_dt: datetime, of_id_to_ignore=None, reasons=None):
+        """
+        Version avec borne de fin
+        """
+        current_try_start_dt = self._get_next_working_datetime(search_start_dt_param)
+        max_search_datetime = min(self._search_limit_datetime(search_start_dt_param), latest_end_dt)
+
+        while current_try_start_dt < max_search_datetime:
+            potential_end_dt = self.calculate_end_datetime(current_try_start_dt, duration_hours)
+            if potential_end_dt == datetime.max:
+                if reasons is not None:
+                    reasons.append(f"Calcul de fin infini à partir de {current_try_start_dt}")
+                current_try_start_dt = self._get_next_working_datetime(current_try_start_dt + timedelta(days=1))
+                continue
+
+            if potential_end_dt > latest_end_dt:
+                if reasons is not None:
+                    reasons.append(f"La fin potentielle {potential_end_dt} dépasse la borne {latest_end_dt}")
+                return None, None
+
+            # Vérification capacité
+            if not self._can_add_slot_in_week(current_try_start_dt, potential_end_dt):
+                wk = self._week_key(current_try_start_dt)
+                allowed = self._allowed_hours_for_week(current_try_start_dt)
+                used = self.weekly_load_hours[wk]
+                dist = self._weekly_hours_distribution(current_try_start_dt, potential_end_dt)
+                add_hours = dist.get(wk, 0)
+                if reasons is not None:
+                    reasons.append(f"Dépassement capacité semaine {wk}: déjà {used:.2f}h, ajout {add_hours:.2f}h, max {allowed:.2f}h")
+                days_to_next_monday = (7 - current_try_start_dt.weekday()) % 7
+                if days_to_next_monday == 0:
+                    days_to_next_monday = 7
+                next_week_monday = (current_try_start_dt + timedelta(days=days_to_next_monday)).replace(hour=0, minute=0)
+                current_try_start_dt = self._get_next_working_datetime(next_week_monday)
+                continue
+
+            # Vérification chevauchement
+            is_overlap = False
+            for booked_start, booked_end, booked_of_id in self.scheduled_slots:
+                if of_id_to_ignore and booked_of_id == of_id_to_ignore:
+                    continue
+                if current_try_start_dt < booked_end and potential_end_dt > booked_start:
+                    is_overlap = True
+                    if reasons is not None:
+                        reasons.append(f"Chevauchement avec OF {booked_of_id} ({booked_start}–{booked_end})")
+                    current_try_start_dt = self._get_next_working_datetime(booked_end)
+                    break
+            if is_overlap:
+                continue
+
+            return current_try_start_dt, potential_end_dt
 
         return None, None
 
@@ -860,6 +936,7 @@ def run_grouping_algorithm(all_ofs, bom_data, horizon_H_weeks_param):
 # ============================================================================
 def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map, operations_map, params):
     from collections import defaultdict as _dd
+    import bisect
 
     def dt_to_str(dt):
         return dt.strftime("%Y-%m-%d %H:%M") if dt else None
@@ -937,6 +1014,7 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
         result.extend(later)
         return result
 
+    # Initialisation du lundi de référence 
     all_need_dates = [of.need_date for of in all_ofs_with_groups if of.need_date]
     if all_need_dates:
         min_need = min(all_need_dates)
@@ -957,6 +1035,7 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
     def get_level(of):
         return getattr(of, "effective_bom_level", 0)
 
+    # Index BOM 
     parent_to_children = _dd(set)
     bom_children = _dd(list)
     for b in bom_data:
@@ -1003,6 +1082,75 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
 
         return ordered
 
+    # STRUCTURES POUR LA GESTION GLOBALE DES STOCKS
+    global_lots = _dd(list) 
+
+    def check_component_availability(prod_norm, qty_parent, ignore_of_id=None):
+        """
+        Vérifie si la quantité nécessaire de composants est disponible dans les lots globaux.
+        """
+        children = bom_children.get(prod_norm, [])
+        if not children:
+            return True, None, {}, ""
+
+        latest_ready = None
+        allocations = {}
+
+        for child_norm, coef in children:
+            needed = qty_parent * coef
+            if needed <= 0:
+                continue
+
+            lots = global_lots.get(child_norm, [])
+            lots_sorted = sorted(lots, key=lambda l: l['end_dt'])
+            remaining = needed
+            child_ready = None
+            tmp_alloc = []
+            total_available = 0.0
+
+            for idx, lot in enumerate(lots_sorted):
+                if ignore_of_id and lot.get('of_id') == ignore_of_id:
+                    continue
+                free = lot['qty_free']
+                if free <= 0:
+                    continue
+                take = min(free, remaining)
+                if take <= 0:
+                    continue
+                remaining -= take
+                total_available += take
+                tmp_alloc.append((idx, take))
+                child_ready = lot['end_dt']
+                if remaining <= 1e-9:
+                    break
+
+            if remaining > 1e-9:
+                child_raw = child_norm
+                reason = f"Stock insuffisant pour composant {child_raw}: besoin={needed}, dispo={total_available}"
+                return False, None, {}, reason
+
+            allocations[child_norm] = tmp_alloc
+            if child_ready and (latest_ready is None or child_ready > latest_ready):
+                latest_ready = child_ready
+
+        return True, latest_ready, allocations, ""
+
+    def commit_allocations(allocations):
+        for child_norm, uses in allocations.items():
+            lots = global_lots.get(child_norm, [])
+            if not lots:
+                continue
+            lots_sorted = sorted(lots, key=lambda l: l['end_dt'])
+            for idx, qty_used in uses:
+                if 0 <= idx < len(lots_sorted):
+                    lots_sorted[idx]['qty_free'] -= qty_used
+            global_lots[child_norm] = lots_sorted
+
+    def add_produced_lot(prod_norm, end_dt, qty, of_id):
+        global_lots[prod_norm].append({'end_dt': end_dt, 'qty_free': qty, 'of_id': of_id})
+        global_lots[prod_norm] = sorted(global_lots[prod_norm], key=lambda l: l['end_dt'])
+
+    # Fonction d'ordonnancement d'un OF individuel 
     def schedule_single_of(of_to_schedule, group_id=None):
         need_dt = of_to_schedule.need_date
         advance_w = get_advance_weeks(of_to_schedule)
@@ -1011,10 +1159,39 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
         earliest_allowed = need_dt - timedelta(weeks=advance_w)
         latest_allowed = need_dt + timedelta(weeks=retard_w)
 
-        key_of = of_to_schedule.normalized_id
-        key_prod = of_to_schedule.product_id
-        key_type = _norm(of_to_schedule.product_type)
+        prod_norm = of_to_schedule.product_id
+        qty = of_to_schedule.quantity
 
+        # Vérification stock composants (global)
+        stock_ok, components_ready_dt, allocations, stock_reason = check_component_availability(
+            prod_norm, qty, ignore_of_id=of_to_schedule.id
+        )
+        if not stock_ok:
+            status = "ÉCHOUÉ(stock insuffisant)"
+            of_to_schedule.status = status
+            of_to_schedule.scheduled_start_date = None
+            of_to_schedule.scheduled_end_date = None
+            smoothing_items.append({
+                "of_id": of_to_schedule.id,
+                "product_id": of_to_schedule.raw_product_id,
+                "designation": of_to_schedule.designation,
+                "group_id": group_id if group_id else "INDIVIDUEL",
+                "qty_besoin": qty_besoin_raw(of_to_schedule),
+                "need_date": need_dt.strftime("%Y-%m-%d"),
+                "scheduled_start": None,
+                "scheduled_end": None,
+                "status": status,
+                "retard_jours": 0,
+                "avance_jours": 0,
+                "operations": [],
+                "debug": stock_reason,
+            })
+            return of_to_schedule
+
+        # Récupération des opérations
+        key_of = of_to_schedule.normalized_id
+        key_prod = prod_norm
+        key_type = _norm(of_to_schedule.product_type)
         ops = (operations_map.get(key_of, []) or
                operations_map.get(key_prod, []) or
                operations_map.get(key_type, []))
@@ -1051,6 +1228,8 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
         chain_last_end = None
         op_sched = []
         feasible = True
+        fail_reason = ""
+        fail_post = None
 
         week_starts = candidate_week_starts(need_dt, advance_w, retard_w)
 
@@ -1060,13 +1239,20 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 break
 
             start_search = max(ws, earliest_allowed)
+            if components_ready_dt is not None:
+                start_search = max(start_search, components_ready_dt)
+
             chain_last_end = None
             op_sched_try = []
             ok = True
+            fail_reason = ""
+            fail_post = None
 
             for op_def in ops:
                 post = posts_map.get(op_def.post_id)
                 if not post:
+                    fail_reason = f"Missing post {op_def.post_id}"
+                    fail_post = op_def.post_id
                     ok = False
                     break
 
@@ -1077,17 +1263,21 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
 
                 start_search = post._get_next_working_datetime(start_search)
 
-                s_dt, e_dt = post.find_available_slot_bounded(
+                # Recherche avec collecte des raisons
+                slot_reasons = []
+                s_dt, e_dt = post.find_available_slot(
                     start_search,
                     dur_h,
-                    latest_end_dt=we,
                     of_id_to_ignore=of_to_schedule.id + "_" + op_def.operation_name,
+                    reasons=slot_reasons
                 )
 
                 if s_dt and e_dt and e_dt > latest_allowed:
                     s_dt, e_dt = None, None
 
                 if not s_dt or not e_dt:
+                    fail_reason = f"No slot on post {op_def.post_id}: " + "; ".join(slot_reasons)
+                    fail_post = op_def.post_id
                     ok = False
                     break
 
@@ -1127,6 +1317,11 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 avance_jours = (need_dt - start_dt).days
             else:
                 avance_jours = 0
+
+            commit_allocations(allocations)
+
+            if qty > 0:
+                add_produced_lot(prod_norm, end_dt, qty, of_to_schedule.id)
 
             smoothing_items.append({
                 "of_id": of_to_schedule.id,
@@ -1169,131 +1364,50 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                 "retard_jours": 0,
                 "avance_jours": 0,
                 "operations": [],
-                "debug": "No available slot within allowed advance/retard weeks",
+                "debug": fail_reason or "No available slot within allowed advance/retard weeks",
             })
 
         return of_to_schedule
 
+    # Construction de la file d'attente chronologique
+    planning_queue = []  
+
+    for group in groups:
+        planning_queue.append(('group', group, group.time_window_start))
+
+    for of in all_ofs_with_groups:
+        if of.assigned_group_id is None:
+            planning_queue.append(('individual', of, of.need_date))
+
+    planning_queue.sort(key=lambda x: x[2])
+
+    # Dictionnaire pour mémoriser les dernières fins sur chaque poste au sein d'un groupe
     group_post_last_end = {}
 
-    for group in sorted(groups, key=lambda g: g.time_window_start):
-        group_ofs = [of for of in all_ofs_with_groups if of.assigned_group_id == group.id]
-        ofs_sorted = order_group_ofs_by_bom_chain(group_ofs)
+    # Parcours de la file
+    for item_type, obj, ref_date in planning_queue:
+        if item_type == 'group':
+            group = obj
+            group_ofs = [of for of in all_ofs_with_groups if of.assigned_group_id == group.id]
+            ofs_sorted = order_group_ofs_by_bom_chain(group_ofs)
 
-        group_products_norm = {of.product_id for of in group_ofs}
-        production_lots = _dd(list)
+            group_post_last_end.clear()
 
-        canonical_norm_to_raw = {}
-        for of in group_ofs:
-            if of.product_id not in canonical_norm_to_raw:
-                canonical_norm_to_raw[of.product_id] = of.raw_product_id
+            for of_to_schedule in ofs_sorted:
+                need_dt = of_to_schedule.need_date
+                advance_w = get_advance_weeks(of_to_schedule)
+                retard_w = get_retard_weeks(of_to_schedule)
+                earliest_allowed = need_dt - timedelta(weeks=advance_w)
+                latest_allowed = need_dt + timedelta(weeks=retard_w)
 
-        group_post_last_end.clear()
+                prod_norm = of_to_schedule.product_id
+                qty = of_to_schedule.quantity
 
-        def compute_stock_feasibility(of_obj):
-            p_norm = of_obj.product_id
-            qty_parent = of_obj.quantity
-            if qty_parent <= 0:
-                return True, None, {}, ""
-
-            children = bom_children.get(p_norm, [])
-            if not children:
-                return True, None, {}, ""
-
-            latest_ready = None
-            allocations = {}
-
-            for child_norm, coef in children:
-                if child_norm not in group_products_norm:
-                    continue
-
-                needed = qty_parent * coef
-                if needed <= 0:
-                    continue
-
-                lots = sorted(production_lots.get(child_norm, []), key=lambda l: l["end_dt"])
-                remaining = needed
-                child_ready = None
-                tmp_alloc = []
-                total_available = 0.0
-
-                for idx, lot in enumerate(lots):
-                    free = float(lot.get("qty_free", 0.0) or 0.0)
-                    if free <= 0:
-                        continue
-                    take = min(free, remaining)
-                    if take <= 0:
-                        continue
-                    remaining -= take
-                    total_available += take
-                    tmp_alloc.append((idx, take))
-                    child_ready = lot["end_dt"]
-                    if remaining <= 1e-9:
-                        break
-
-                if remaining > 1e-9:
-                    child_raw = canonical_norm_to_raw.get(child_norm, child_norm)
-                    reason = f"Stock insuffisant pour composant {child_raw}: besoin={needed}, dispo={total_available}"
-                    return False, None, {}, reason
-
-                allocations[child_norm] = tmp_alloc
-                if child_ready and (latest_ready is None or child_ready > latest_ready):
-                    latest_ready = child_ready
-
-            return True, latest_ready, allocations, ""
-
-        def commit_allocations(allocations):
-            for child_norm, uses in allocations.items():
-                lots = production_lots.get(child_norm, [])
-                if not lots:
-                    continue
-                lots_sorted = sorted(lots, key=lambda l: l["end_dt"])
-                for idx, qty_used in uses:
-                    if 0 <= idx < len(lots_sorted):
-                        lots_sorted[idx]["qty_free"] = float(lots_sorted[idx].get("qty_free", 0.0) or 0.0) - qty_used
-                production_lots[child_norm] = lots_sorted
-
-        for of_to_schedule in ofs_sorted:
-            need_dt = of_to_schedule.need_date
-            advance_w = get_advance_weeks(of_to_schedule)
-            retard_w = get_retard_weeks(of_to_schedule)
-            earliest_allowed = need_dt - timedelta(weeks=advance_w)
-            latest_allowed = need_dt + timedelta(weeks=retard_w)
-
-            stock_ok, components_ready_dt, allocations, stock_reason = compute_stock_feasibility(of_to_schedule)
-            if not stock_ok:
-                status = "ÉCHOUÉ(stock insuffisant)"
-                of_to_schedule.status = status
-                of_to_schedule.scheduled_start_date = None
-                of_to_schedule.scheduled_end_date = None
-                smoothing_items.append({
-                    "of_id": of_to_schedule.id,
-                    "product_id": of_to_schedule.raw_product_id,
-                    "designation": of_to_schedule.designation,
-                    "group_id": group.id,
-                    "qty_besoin": qty_besoin_raw(of_to_schedule),
-                    "need_date": need_dt.strftime("%Y-%m-%d"),
-                    "scheduled_start": None,
-                    "scheduled_end": None,
-                    "status": status,
-                    "retard_jours": 0,
-                    "avance_jours": 0,
-                    "operations": [],
-                    "debug": stock_reason,
-                })
-                scheduled_ofs.append(of_to_schedule)
-                continue
-
-            prod_norm = of_to_schedule.product_id
-            children_norms = parent_to_children.get(prod_norm, set())
-            if children_norms:
-                blocked = False
-                for child_pid_norm in children_norms:
-                    child_ofs = [ofc for ofc in group_ofs if ofc.product_id == child_pid_norm]
-                    if child_ofs and all(str(ofc.status).startswith("ÉCHOUÉ") for ofc in child_ofs):
-                        blocked = True
-                        break
-                if blocked:
+                # Vérification stock composants (global)
+                stock_ok, components_ready_dt, allocations, stock_reason = check_component_availability(
+                    prod_norm, qty, ignore_of_id=of_to_schedule.id
+                )
+                if not stock_ok:
                     status = "ÉCHOUÉ(stock insuffisant)"
                     of_to_schedule.status = status
                     of_to_schedule.scheduled_start_date = None
@@ -1311,205 +1425,216 @@ def smooth_and_schedule_groups(groups, all_ofs_with_groups, bom_data, posts_map,
                         "retard_jours": 0,
                         "avance_jours": 0,
                         "operations": [],
-                        "debug": "Blocked because component OFs are all ÉCHOUÉ",
+                        "debug": stock_reason,
                     })
                     scheduled_ofs.append(of_to_schedule)
                     continue
 
-            key_of = of_to_schedule.normalized_id
-            key_prod = prod_norm
-            key_type = _norm(of_to_schedule.product_type)
-            ops = (operations_map.get(key_of, []) or
-                   operations_map.get(key_prod, []) or
-                   operations_map.get(key_type, []))
+                # Récupération des opérations
+                key_of = of_to_schedule.normalized_id
+                key_prod = prod_norm
+                key_type = _norm(of_to_schedule.product_type)
+                ops = (operations_map.get(key_of, []) or
+                       operations_map.get(key_prod, []) or
+                       operations_map.get(key_type, []))
 
-            if not ops:
-                status = "ÉCHOUÉ(poste indispo)"
-                of_to_schedule.status = status
-                of_to_schedule.scheduled_start_date = None
-                of_to_schedule.scheduled_end_date = None
-                smoothing_items.append({
-                    "of_id": of_to_schedule.id,
-                    "product_id": of_to_schedule.raw_product_id,
-                    "designation": of_to_schedule.designation,
-                    "group_id": group.id,
-                    "qty_besoin": qty_besoin_raw(of_to_schedule),
-                    "need_date": need_dt.strftime("%Y-%m-%d"),
-                    "scheduled_start": None,
-                    "scheduled_end": None,
-                    "status": status,
-                    "retard_jours": 0,
-                    "avance_jours": 0,
-                    "operations": [],
-                    "debug": "No operations",
-                })
-                scheduled_ofs.append(of_to_schedule)
-                continue
+                if not ops:
+                    status = "ÉCHOUÉ(poste indispo)"
+                    of_to_schedule.status = status
+                    of_to_schedule.scheduled_start_date = None
+                    of_to_schedule.scheduled_end_date = None
+                    smoothing_items.append({
+                        "of_id": of_to_schedule.id,
+                        "product_id": of_to_schedule.raw_product_id,
+                        "designation": of_to_schedule.designation,
+                        "group_id": group.id,
+                        "qty_besoin": qty_besoin_raw(of_to_schedule),
+                        "need_date": need_dt.strftime("%Y-%m-%d"),
+                        "scheduled_start": None,
+                        "scheduled_end": None,
+                        "status": status,
+                        "retard_jours": 0,
+                        "avance_jours": 0,
+                        "operations": [],
+                        "debug": "No operations",
+                    })
+                    scheduled_ofs.append(of_to_schedule)
+                    continue
 
-            ops = sorted(ops, key=lambda o: o.sequence)
-
-            for op_def in ops:
-                post = posts_map.get(op_def.post_id)
-                if post:
-                    post.clear_schedule_for_of(of_to_schedule.id + "_" + op_def.operation_name)
-
-            chosen_sched = None
-            chosen_temp_post_end = None
-            feasible = True
-            fail_reason = ""
-
-            week_starts = candidate_week_starts(need_dt, advance_w, retard_w)
-
-            for ws in week_starts:
-                we = ws + timedelta(days=7)
-                if ws > latest_allowed:
-                    break
-
-                start_search = max(ws, earliest_allowed)
-                chain_last_end = None
-                op_sched_try = []
-                temp_post_end = {}
-                ok = True
+                ops = sorted(ops, key=lambda o: o.sequence)
 
                 for op_def in ops:
                     post = posts_map.get(op_def.post_id)
-                    if not post:
-                        ok = False
-                        fail_reason = f"Missing post {op_def.post_id}"
+                    if post:
+                        post.clear_schedule_for_of(of_to_schedule.id + "_" + op_def.operation_name)
+
+                chosen_sched = None
+                chosen_temp_post_end = None
+                feasible = True
+                fail_reason = ""
+                fail_post = None
+
+                week_starts = candidate_week_starts(need_dt, advance_w, retard_w)
+
+                for ws in week_starts:
+                    we = ws + timedelta(days=7)
+                    if ws > latest_allowed:
                         break
 
-                    dur_h = op_def.standard_time_hours
-                    real_last = group_post_last_end.get(post.id)
-                    tent_last = temp_post_end.get(post.id)
-                    last_for_post = max([d for d in (real_last, tent_last) if d is not None], default=None)
-
+                    start_search = max(ws, earliest_allowed)
                     if components_ready_dt is not None:
                         start_search = max(start_search, components_ready_dt)
 
-                    if chain_last_end is not None:
-                        start_search = max(start_search, chain_last_end)
+                    chain_last_end = None
+                    op_sched_try = []
+                    temp_post_end = {}
+                    ok = True
+                    fail_reason = ""
+                    fail_post = None
 
-                    if last_for_post is not None:
-                        start_search = max(start_search, last_for_post)
+                    for op_def in ops:
+                        post = posts_map.get(op_def.post_id)
+                        if not post:
+                            fail_reason = f"Missing post {op_def.post_id}"
+                            fail_post = op_def.post_id
+                            ok = False
+                            break
 
-                    start_search = post._get_next_working_datetime(start_search)
+                        dur_h = op_def.standard_time_hours
+                        real_last = group_post_last_end.get(post.id)
+                        tent_last = temp_post_end.get(post.id)
+                        last_for_post = max([d for d in (real_last, tent_last) if d is not None], default=None)
 
-                    s_dt, e_dt = post.find_available_slot_bounded(
-                        start_search,
-                        dur_h,
-                        latest_end_dt=we,
-                        of_id_to_ignore=of_to_schedule.id + "_" + op_def.operation_name,
-                    )
+                        if chain_last_end is not None:
+                            start_search = max(start_search, chain_last_end)
 
-                    if s_dt and e_dt and e_dt > latest_allowed:
-                        s_dt, e_dt = None, None
+                        if last_for_post is not None:
+                            start_search = max(start_search, last_for_post)
 
-                    if not s_dt or not e_dt:
-                        ok = False
+                        start_search = post._get_next_working_datetime(start_search)
+
+                        # Recherche avec collecte des raisons
+                        slot_reasons = []
+                        s_dt, e_dt = post.find_available_slot(
+                            start_search,
+                            dur_h,
+                            of_id_to_ignore=of_to_schedule.id + "_" + op_def.operation_name,
+                            reasons=slot_reasons
+                        )
+
+                        if s_dt and e_dt and e_dt > latest_allowed:
+                            s_dt, e_dt = None, None
+
+                        if not s_dt or not e_dt:
+                            fail_reason = f"No slot on post {op_def.post_id}: " + "; ".join(slot_reasons)
+                            fail_post = op_def.post_id
+                            ok = False
+                            break
+
+                        op_sched_try.append((op_def, post, s_dt, e_dt))
+                        chain_last_end = e_dt
+                        temp_post_end[post.id] = e_dt
+                        start_search = e_dt
+
+                    if ok and op_sched_try:
+                        chosen_sched = op_sched_try
+                        chosen_temp_post_end = temp_post_end
                         break
 
-                    op_sched_try.append((op_def, post, s_dt, e_dt))
-                    chain_last_end = e_dt
-                    temp_post_end[post.id] = e_dt
-                    start_search = e_dt
+                if chosen_sched:
+                    for op_def, post, s_dt, e_dt in chosen_sched:
+                        post.book_slot(s_dt, e_dt, of_to_schedule.id + "_" + op_def.operation_name)
 
-                if ok and op_sched_try:
-                    chosen_sched = op_sched_try
-                    chosen_temp_post_end = temp_post_end
-                    break
+                    for pid, enddt in (chosen_temp_post_end or {}).items():
+                        if group_post_last_end.get(pid) is None or enddt > group_post_last_end[pid]:
+                            group_post_last_end[pid] = enddt
 
-            if chosen_sched:
-                for op_def, post, s_dt, e_dt in chosen_sched:
-                    post.book_slot(s_dt, e_dt, of_to_schedule.id + "_" + op_def.operation_name)
+                    start_dt = chosen_sched[0][2]
+                    end_dt = chosen_sched[-1][3]
+                    of_to_schedule.scheduled_start_date = start_dt
+                    of_to_schedule.scheduled_end_date = end_dt
 
-                for pid, enddt in (chosen_temp_post_end or {}).items():
-                    if group_post_last_end.get(pid) is None or enddt > group_post_last_end[pid]:
-                        group_post_last_end[pid] = enddt
+                    start_d = start_dt.date()
+                    if start_d <= need_dt.date():
+                        statut_calc = "OUI"
+                    elif need_dt.date() < start_d <= latest_allowed.date():
+                        statut_calc = "NON"
+                    else:
+                        statut_calc = "ÉCHOUÉ"
 
-                start_dt = chosen_sched[0][2]
-                end_dt = chosen_sched[-1][3]
-                of_to_schedule.scheduled_start_date = start_dt
-                of_to_schedule.scheduled_end_date = end_dt
+                    statut = "NON" if statut_calc == "ÉCHOUÉ" else statut_calc
+                    of_to_schedule.status = statut
 
-                start_d = start_dt.date()
-                if start_d <= need_dt.date():
-                    statut_calc = "OUI"
-                elif need_dt.date() < start_d <= latest_allowed.date():
-                    statut_calc = "NON"
+                    retard_jours = days_delay_if_late(end_dt, need_dt) if statut == "NON" else 0
+                    if start_dt and start_dt < need_dt:
+                        avance_jours = (need_dt - start_dt).days
+                    else:
+                        avance_jours = 0
+
+                    commit_allocations(allocations)
+
+                    if qty > 0:
+                        add_produced_lot(prod_norm, end_dt, qty, of_to_schedule.id)
+
+                    smoothing_items.append({
+                        "of_id": of_to_schedule.id,
+                        "product_id": of_to_schedule.raw_product_id,
+                        "designation": of_to_schedule.designation,
+                        "group_id": group.id,
+                        "qty_besoin": qty_besoin_raw(of_to_schedule),
+                        "need_date": need_dt.strftime("%Y-%m-%d"),
+                        "scheduled_start": dt_to_str(start_dt),
+                        "scheduled_end": dt_to_str(end_dt),
+                        "status": statut,
+                        "retard_jours": retard_jours,
+                        "avance_jours": avance_jours,
+                        "operations": [
+                            {
+                                "operation": d[0].operation_name,
+                                "post_id": d[0].post_id,
+                                "start": dt_to_str(d[2]),
+                                "end": dt_to_str(d[3]),
+                            }
+                            for d in chosen_sched
+                        ],
+                    })
                 else:
-                    statut_calc = "ÉCHOUÉ"
+                    status = "ÉCHOUÉ(poste indispo)"
+                    of_to_schedule.status = status
+                    of_to_schedule.scheduled_start_date = None
+                    of_to_schedule.scheduled_end_date = None
+                    smoothing_items.append({
+                        "of_id": of_to_schedule.id,
+                        "product_id": of_to_schedule.raw_product_id,
+                        "designation": of_to_schedule.designation,
+                        "group_id": group.id,
+                        "qty_besoin": qty_besoin_raw(of_to_schedule),
+                        "need_date": need_dt.strftime("%Y-%m-%d"),
+                        "scheduled_start": None,
+                        "scheduled_end": None,
+                        "status": status,
+                        "retard_jours": 0,
+                        "avance_jours": 0,
+                        "operations": [],
+                        "debug": fail_reason or "No slot within allowed advance/retard weeks",
+                    })
 
-                statut = "NON" if statut_calc == "ÉCHOUÉ" else statut_calc
-                of_to_schedule.status = statut
+                scheduled_ofs.append(of_to_schedule)
 
-                retard_jours = days_delay_if_late(end_dt, need_dt) if statut == "NON" else 0
-                if start_dt and start_dt < need_dt:
-                    avance_jours = (need_dt - start_dt).days
-                else:
-                    avance_jours = 0
-
-                commit_allocations(allocations)
-
-                qty = of_to_schedule.quantity
-                if qty > 0:
-                    production_lots[prod_norm].append({"end_dt": end_dt, "qty_free": qty})
-                    production_lots[prod_norm] = sorted(production_lots[prod_norm], key=lambda l: l["end_dt"])
-
-                smoothing_items.append({
-                    "of_id": of_to_schedule.id,
-                    "product_id": of_to_schedule.raw_product_id,
-                    "designation": of_to_schedule.designation,
-                    "group_id": group.id,
-                    "qty_besoin": qty_besoin_raw(of_to_schedule),
-                    "need_date": need_dt.strftime("%Y-%m-%d"),
-                    "scheduled_start": dt_to_str(start_dt),
-                    "scheduled_end": dt_to_str(end_dt),
-                    "status": statut,
-                    "retard_jours": retard_jours,
-                    "avance_jours": avance_jours,
-                    "operations": [
-                        {
-                            "operation": d[0].operation_name,
-                            "post_id": d[0].post_id,
-                            "start": dt_to_str(d[2]),
-                            "end": dt_to_str(d[3]),
-                        }
-                        for d in chosen_sched
-                    ],
-                })
-            else:
-                status = "ÉCHOUÉ(poste indispo)"
-                of_to_schedule.status = status
-                of_to_schedule.scheduled_start_date = None
-                of_to_schedule.scheduled_end_date = None
-                smoothing_items.append({
-                    "of_id": of_to_schedule.id,
-                    "product_id": of_to_schedule.raw_product_id,
-                    "designation": of_to_schedule.designation,
-                    "group_id": group.id,
-                    "qty_besoin": qty_besoin_raw(of_to_schedule),
-                    "need_date": need_dt.strftime("%Y-%m-%d"),
-                    "scheduled_start": None,
-                    "scheduled_end": None,
-                    "status": status,
-                    "retard_jours": 0,
-                    "avance_jours": 0,
-                    "operations": [],
-                    "debug": fail_reason or "No slot within allowed advance/retard weeks",
-                })
-
+        else:  # item_type == 'individual'
+            of_to_schedule = obj
+            schedule_single_of(of_to_schedule, group_id=None)
             scheduled_ofs.append(of_to_schedule)
 
-    unassigned_ofs = [of for of in all_ofs_with_groups if of.assigned_group_id is None]
-    unassigned_sorted = sorted(unassigned_ofs, key=lambda x: (get_level(x), x.need_date, x.id))
-
-    for unassigned_of in unassigned_sorted:
-        scheduled_of = schedule_single_of(unassigned_of, group_id=None)
-        scheduled_ofs.append(scheduled_of)
-
+    # Reconstruction de la liste finale
     final_by_id = {of.id: of for of in scheduled_ofs}
     updated_all = [final_by_id.get(orig.id, orig) for orig in all_ofs_with_groups]
 
+    # Calcul et affichage du nombre d'OFs échoués
+    failed_count = sum(1 for item in smoothing_items if "ÉCHOUÉ" in item.get("status", ""))
+    print(f"[Smoothing] Nombre total d'OFs échoués : {failed_count}")
+
+    # Écriture des fichiers 
     out = {"generated_at": datetime.now().isoformat(timespec="seconds"), "items": smoothing_items}
     try:
         with open(smoothing_json_path, "w", encoding="utf-8") as f:

@@ -7,7 +7,6 @@
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
   <style>
     :root {
       --primary-color: #2563eb;
@@ -100,19 +99,6 @@
       color: #ffffff;
     }
 
-    .grp {
-      margin-top: 28px;
-    }
-
-    .grp h2 {
-      font-size: 18px;
-      margin: 0 0 10px;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
     table {
       width: 100%;
       border-collapse: collapse;
@@ -121,6 +107,7 @@
       border-radius: 12px;
       overflow: hidden;
       box-shadow: var(--shadow);
+      margin-top: 20px;
     }
 
     thead th {
@@ -142,6 +129,11 @@
 
     tbody tr:hover {
       background: rgba(37, 99, 235, 0.08);
+    }
+
+    /* Style pour les lignes d'OFs individuels (facultatif) */
+    tbody tr.indiv-row td:first-child {
+      border-left: 3px solid var(--warning-color);
     }
 
     .status {
@@ -230,20 +222,16 @@
       color: var(--warning-color);
     }
 
-    .group-badge.single {
-      background: rgba(16, 185, 129, 0.2);
-      border-color: var(--success-color);
-      color: var(--success-color);
-    }
-
-    .indiv-group {
-      border-left: 3px solid var(--warning-color);
-    }
-
     @media (max-width: 600px) {
       .page-header {
         flex-direction: column;
         align-items: flex-start;
+      }
+      table {
+        font-size: 12px;
+      }
+      th, td {
+        padding: 6px;
       }
     }
   </style>
@@ -263,162 +251,71 @@
     {% if rows|length == 0 %}
       <div class="empty">Aucune donnée de planning. Lance d’abord l’analyse/lissage.</div>
     {% else %}
-      {# ===== TRAITEMENT DES GROUPES RÉELS ===== #}
-      {% set real_groups = {} %}
-      {% set individual_ofs = [] %}
-      
-      {% for r in rows %}
-        {% if r.group_id and r.group_id.startswith('GRP') %}
-          {# C'est un vrai groupe #}
-          {% set gid = r.group_id %}
-          {% if not real_groups.get(gid) %}{% set _ = real_groups.update({gid: []}) %}{% endif %}
-          {% set _ = real_groups[gid].append(r) %}
-        {% else %}
-          {# C'est un OF individuel #}
-          {% set _ = individual_ofs.append(r) %}
-        {% endif %}
-      {% endfor %}
-
-      {# ===== AFFICHAGE DES GROUPES RÉELS ===== #}
-      {% for gid, list_ in real_groups.items() %}
-        <div class="grp">
-          <h2>
-            <span class="group-badge grp">{{ gid }}</span>
-            <span class="pill">{{ list_|length }} OF(s)</span>
-          </h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Groupe</th>
-                <th>OF</th>
-                <th>Article</th>
-                <th>Désignation</th>
-                <th>Besoin</th>
-                <th>Qty</th>
-                <th>Début planifié</th>
-                <th>Fin planifiée</th>
-                <th>Statut</th>
-                <th>Retard (j)</th>
-                <th>Avance (j)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for it in list_ %}
-                <tr>
-                  <td>
-                    <span class="group-badge grp">{{ it.group_id }}</span>
-                  </td>
-                  <td>{{ it.of_id }}</td>
-                  <td>{{ it.product_id }}</td>
-                  <td>
-                    {{ it.designation or "—" }}
-                    {% if it.operations and it.operations|length > 0 %}
-                      <div class="ops">
-                        {% for op in it.operations %}
-                          • <strong>{{ op.operation }}</strong> (poste {{ op.post_id }}) :
-                          {{ op.start }} → {{ op.end }}<br/>
-                        {% endfor %}
-                      </div>
-                    {% endif %}
-                  </td>
-                  <td><span class="pill">{{ it.need_date }}</span></td>
-                  <td>{{ it.qty_besoin or "—" }}</td>
-                  <td>{{ it.scheduled_start or "—" }}</td>
-                  <td>{{ it.scheduled_end or "—" }}</td>
-                  <td>
-                    {% set st = (it.status or "") %}
-                    {% if "ÉCHOUÉ" in st %}
-                      <span class="status fail">{{ st }}</span>
-                    {% elif "NON" in st %}
-                      <span class="status warn">{{ st }}</span>
-                    {% elif "OUI" in st %}
-                      <span class="status ok">{{ st }}</span>
-                    {% else %}
-                      <span class="status">{{ st or "—" }}</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ it.retard_jours or 0 }}</td>
-                  <td>{{ it.avance_jours or 0 }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% endfor %}
-
-      {# ===== AFFICHAGE DES OFs INDIVIDUELS ===== #}
-      {% if individual_ofs %}
-        <div class="grp">
-          <h2>
-            <span class="group-badge indiv">OFs INDIVIDUELS</span>
-            <span class="pill">{{ individual_ofs|length }} OF(s) traités séparément</span>
-          </h2>
-          
-          {% for it in individual_ofs|sort(attribute='of_id') %}
-            <div class="grp indiv-group" style="margin-top: 16px; border-left: 3px solid var(--warning-color); padding-left: 12px;">
-              <h3 style="font-size: 15px; margin-bottom: 8px; color: var(--warning-color);">
-                <i class="fas fa-file-alt"></i> OF {{ it.of_id }} 
-                <span class="pill" style="margin-left: 8px;">Individuel</span>
-              </h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Groupe</th>
-                    <th>OF</th>
-                    <th>Article</th>
-                    <th>Désignation</th>
-                    <th>Besoin</th>
-                    <th>Qty</th>
-                    <th>Début planifié</th>
-                    <th>Fin planifiée</th>
-                    <th>Statut</th>
-                    <th>Retard (j)</th>
-                    <th>Avance (j)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      <span class="group-badge indiv">INDIVIDUEL</span>
-                    </td>
-                    <td>{{ it.of_id }}</td>
-                    <td>{{ it.product_id }}</td>
-                    <td>
-                      {{ it.designation or "—" }}
-                      {% if it.operations and it.operations|length > 0 %}
-                        <div class="ops">
-                          {% for op in it.operations %}
-                            • <strong>{{ op.operation }}</strong> (poste {{ op.post_id }}) :
-                            {{ op.start }} → {{ op.end }}<br/>
-                          {% endfor %}
-                        </div>
-                      {% endif %}
-                    </td>
-                    <td><span class="pill">{{ it.need_date }}</span></td>
-                    <td>{{ it.qty_besoin or "—" }}</td>
-                    <td>{{ it.scheduled_start or "—" }}</td>
-                    <td>{{ it.scheduled_end or "—" }}</td>
-                    <td>
-                      {% set st = (it.status or "") %}
-                      {% if "ÉCHOUÉ" in st %}
-                        <span class="status fail">{{ st }}</span>
-                      {% elif "NON" in st %}
-                        <span class="status warn">{{ st }}</span>
-                      {% elif "OUI" in st %}
-                        <span class="status ok">{{ st }}</span>
-                      {% else %}
-                        <span class="status">{{ st or "—" }}</span>
-                      {% endif %}
-                    </td>
-                    <td>{{ it.retard_jours or 0 }}</td>
-                    <td>{{ it.avance_jours or 0 }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Groupe</th>
+            <th>OF</th>
+            <th>Article</th>
+            <th>Désignation</th>
+            <th>Besoin</th>
+            <th>Qty</th>
+            <th>Début planifié</th>
+            <th>Fin planifiée</th>
+            <th>Statut</th>
+            <th>Retard (j)</th>
+            <th>Avance (j)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in rows %}
+            {# Appliquer une classe CSS pour les OFs individuels si souhaité #}
+            <tr {% if it.group_id == "INDIVIDUEL" %}class="indiv-row"{% endif %}>
+              <td>
+                {% if it.group_id and it.group_id.startswith('GRP') %}
+                  <span class="group-badge grp">{{ it.group_id }}</span>
+                {% else %}
+                  <span class="group-badge indiv">{{ it.group_id or "INDIVIDUEL" }}</span>
+                {% endif %}
+              </td>
+              <td>{{ it.of_id }}</td>
+              <td>{{ it.product_id }}</td>
+              <td>
+                {{ it.designation or "—" }}
+                {% if it.operations and it.operations|length > 0 %}
+                  <div class="ops">
+                    {% for op in it.operations %}
+                      • <strong>{{ op.operation }}</strong> (poste {{ op.post_id }}) :
+                      {{ op.start }} → {{ op.end }}<br/>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </td>
+              <td><span class="pill">{{ it.need_date }}</span></td>
+              <td>{{ it.qty_besoin or "—" }}</td>
+              <td>{{ it.scheduled_start or "—" }}</td>
+              <td>{{ it.scheduled_end or "—" }}</td>
+              <td>
+                {% set st = (it.status or "") %}
+                {% if "ÉCHOUÉ" in st %}
+                  <span class="status fail">{{ st }}</span>
+                  {% if it.debug %}
+                    <br/><span style="font-size:0.8em; color:var(--text-secondary);">({{ it.debug }})</span>
+                  {% endif %}
+                {% elif "NON" in st %}
+                  <span class="status warn">{{ st }}</span>
+                {% elif "OUI" in st %}
+                  <span class="status ok">{{ st }}</span>
+                {% else %}
+                  <span class="status">{{ st or "—" }}</span>
+                {% endif %}
+              </td>
+              <td>{{ it.retard_jours or 0 }}</td>
+              <td>{{ it.avance_jours or 0 }}</td>
+            </tr>
           {% endfor %}
-        </div>
-      {% endif %}
+        </tbody>
+      </table>
     {% endif %}
 
     <p><a href="/" class="back-link">← Retour</a></p>
