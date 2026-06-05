@@ -1777,7 +1777,7 @@ def write_smoothing_csv(smoothing_items, output_filepath):
     import os
     os.makedirs(os.path.dirname(output_filepath), exist_ok=True)
 
-    header = ["Groupe", "OF", "Date de besoin", "Statut"]
+    header = ["Groupe", "OF", "Date de besoin", "Debut", "Fin", "Statut"]
     with open(output_filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter=";")
         writer.writerow(header)
@@ -1785,11 +1785,11 @@ def write_smoothing_csv(smoothing_items, output_filepath):
             group_id = item.get("group_id", "INDIVIDUEL")
             of_id = item.get("of_id", "")
             need_date = item.get("need_date", "")
+            start = item.get("scheduled_start", "")
+            end = item.get("scheduled_end", "")
             status = item.get("status", "")
-            if need_date and " " in need_date:
-                need_date = need_date.split(" ")[0]
-            writer.writerow([group_id, of_id, need_date, status])
-    print(f"✅ Fichier CSV du lissage généré (ordre original conservé) : {output_filepath}")
+            writer.writerow([group_id, of_id, need_date, start, end, status])
+    print(f"✅ Fichier CSV du lissage généré (avec début/fin) : {output_filepath}")
 
 
 def write_posts_weekly_capacity_report(posts_map, output_filepath):
