@@ -575,7 +575,6 @@
         </div>
 
         <form method="POST" enctype="multipart/form-data" id="analysisForm">
-            <input type="hidden" name="action" value="run_algorithm">
             <!-- Configuration principale -->
             <div class="card gradient-border">
                 <div class="card-header">
@@ -642,6 +641,21 @@
                             >
                         </div>
 
+                        <div class="param-group">
+                            <label class="param-label" for="week_sort_order">
+                                Ordre des semaines candidates
+                                <div class="tooltip">
+                                    <i class="fas fa-info-circle" style="margin-left: 4px;"></i>
+                                    <span class="tooltiptext">
+                                        <strong>Plus tôt</strong> : teste les semaines de la plus ancienne à la plus récente.<br>
+                                        <strong>Plus tard</strong> : teste les semaines les plus proches de la date de besoin en premier.<br>
+                                </div>
+                            </label>
+                            <select name="week_sort_order" id="week_sort_order" class="param-input">
+                                <option value="earliest" selected>Plus tôt</option>
+                                <option value="closest" >Plus tard</option>
+                            </select>
+                        </div>                        
                         <!--
                         <div class="param-group">
                             <label class="param-label" for="max_lot_size">
@@ -740,15 +754,16 @@
                 </div>
 
                 <!-- Actions -->
+                                <!-- Actions -->
                 <div class="btn-group">
-                    <button type="submit" class="btn btn-primary" id="runAnalysis" 
+                    <button type="submit" class="btn btn-primary" name="action" value="group_only"
                             onclick="handleSubmit(event)" 
                             style="cursor: pointer; pointer-events: auto; position: relative; z-index: 10;">
                         <i class="fas fa-play"></i>
                         Lancer le groupement
                     </button>
-                    <button type="button" class="btn btn-success" id="runPlanningBtn"
-                            onclick="runPlanning(event)">
+                    <button type="submit" class="btn btn-success" name="action" value="smooth_only"
+                            onclick="handleSubmit(event)">
                         <i class="fas fa-calendar-check"></i>
                         Lancer le lissage
                     </button>
@@ -894,23 +909,6 @@
             const fileSection = document.getElementById('fileUploadSection');
             fileSection.style.opacity = '1';
             fileSection.style.pointerEvents = 'auto';
-        }
-
-        function runPlanning(e) {
-            if (e) e.preventDefault();
-            const form = document.getElementById('analysisForm');
-            const loadingSection = document.getElementById('loadingSection');
-            const actionInput = form.querySelector('input[name="action"]');
-            if (!form || !loadingSection || !actionInput) {
-                alert("Erreur technique : éléments manquants (form/loading/action).");
-                return false;
-            }
-            actionInput.value = 'plan';                 // ← tell Flask we want planning
-            loadingSection.style.display = 'block';     // same UX as first button
-            form.style.display = 'none';
-            document.querySelectorAll('.btn-group button').forEach(b => b.disabled = true);
-            form.submit();                              // normal POST
-            return true;
         }
 
         // Drag & Drop pour les fichiers

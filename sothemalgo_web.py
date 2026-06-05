@@ -6,6 +6,9 @@ import json
 import random
 from datetime import datetime, timedelta
 import random
+import time
+from functools import wraps
+import pickle  # Pour la sauvegarde de l'état groupé
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,9 +22,20 @@ from sothemalgo_grouper import (
     HORIZON_H_WEEKS,
 )
 
+def timing_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        elapsed = time.time() - start
+        print(f"[TIMING] {func.__name__} executed in {elapsed:.2f}s")
+        return result
+    return wrapper
 
+@timing_decorator
 def parse_output_file(file_path):
-    """Parse le fichier de sortie et retourne les données structurées."""
+    """Parse le fichier de sortie et retourne les données structurées.
+       Supporte 14 colonnes (avec Priority) et 13 colonnes (ancien format)."""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -35,6 +49,10 @@ def parse_output_file(file_path):
         in_group = False
         in_unassigned = False
         in_calculated_stocks = False
+
+        # Détection automatique du nombre de colonnes via l'en-tête
+        header = None
+        has_priority = False
 
         for line in lines:
             line = line.strip()
@@ -86,35 +104,63 @@ def parse_output_file(file_path):
                 in_calculated_stocks = False
                 continue
 
+            # Détection de l'en-tête et du format
+            if '\t' in line and not line.startswith('#') and 'Part' in line:
+                header_parts = line.split('\t')
+                if 'Priority' in header_parts:
+                    has_priority = True
+                continue
+
+            # Lignes de données OF
             if '\t' in line and not line.startswith('#') and line.count('\t') >= 12:
                 parts = line.split('\t')
 
-                if parts[0] == 'Part':
-                    continue
+                # Accepter 14 ou 13 colonnes
+                if len(parts) == 14 or (len(parts) == 13 and not has_priority):
+                    # Mapping dynamique selon le format détecté
+                    if len(parts) == 14:
+                        of_data = {
+                            'Part': parts[0],
+                            'Description': parts[1],
+                            'Order_Code': parts[2],
+                            'FG': parts[3],
+                            'CAT': parts[4],
+                            'US': parts[5],
+                            'FS': parts[6],
+                            'Qty': parts[7],
+                            'X3_Date': parts[8],
+                            'Priority': parts[9],     
+                            'GRP_FLG': parts[10],
+                            'Start_Date': parts[11],
+                            'Delay': parts[12],
+                            'remaining_stock': parts[13]
+                        }
+                    else:  
+                        of_data = {
+                            'Part': parts[0],
+                            'Description': parts[1],
+                            'Order_Code': parts[2],
+                            'FG': parts[3],
+                            'CAT': parts[4],
+                            'US': parts[5],
+                            'FS': parts[6],
+                            'Qty': parts[7],
+                            'X3_Date': parts[8],
+                            'Priority': '',             
+                            'GRP_FLG': parts[9],
+                            'Start_Date': parts[10],
+                            'Delay': parts[11],
+                            'remaining_stock': parts[12]
+                        }
+                else:
+                    continue  # ligne mal formée, on ignore
 
-                if len(parts) >= 13:
-                    of_data = {
-                        'Part': parts[0],
-                        'Description': parts[1],
-                        'Order_Code': parts[2],
-                        'FG': parts[3],
-                        'CAT': parts[4],
-                        'US': parts[5],
-                        'FS': parts[6],
-                        'Qty': parts[7],
-                        'X3_Date': parts[8],
-                        'GRP_FLG': parts[9] if len(parts) > 9 else '',
-                        'Start_Date': parts[10] if len(parts) > 10 else '',
-                        'Delay': parts[11] if len(parts) > 11 else '',
-                        'remaining_stock': parts[12] if len(parts) > 12 else 'N/A'
-                    }
-
-                    if in_unassigned or not of_data.get('GRP_FLG') or of_data.get('GRP_FLG') == 'INDIVIDUEL':
-                        of_data['Statut'] = 'Non affecté'
-                        unassigned_ofs.append(of_data)
-                    elif current_group:
-                        of_data['Statut'] = 'Affecté'
-                        current_group['ofs'].append(of_data)
+                if in_unassigned or not of_data.get('GRP_FLG') or of_data.get('GRP_FLG') == 'INDIVIDUEL':
+                    of_data['Statut'] = 'Non affecté'
+                    unassigned_ofs.append(of_data)
+                elif current_group:
+                    of_data['Statut'] = 'Affecté'
+                    current_group['ofs'].append(of_data)
 
         if current_group:
             groups.append(current_group)
@@ -133,10 +179,14 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Chemin du fichier de sauvegarde de l'état groupé
+GROUP_STATE_FILE = os.path.join(app.config['UPLOAD_FOLDER'], 'group_state.pkl')
+
 
 @app.route("/planning")
 def planning_page():
     import json, os
+    start = time.time()
     path = os.path.join(os.getcwd(), "uploads", "smoothing_view.json")
     rows = []
     generated_at = "—"
@@ -159,6 +209,9 @@ def planning_page():
         r.setdefault("retard_jours", 0)
         r.setdefault("operations", [])
 
+    elapsed = time.time() - start
+    print(f"[TIMING] /planning loaded JSON in {elapsed:.2f}s, items count: {len(rows)}")
+
     return render_template(
         "planning_modern.html",
         generated_at=generated_at,
@@ -171,6 +224,7 @@ def index():
     if request.method == 'POST':
         action = request.form.get('action', 'run_algorithm')
 
+        # Récupération des fichiers
         besoins_file_storage = request.files.get('besoins_file')
         nomenclature_file_storage = request.files.get('nomenclature_file')
         posts_file_storage = request.files.get('posts_file')
@@ -180,6 +234,7 @@ def index():
         base_dir = BASE_DIR
         use_test_data = request.form.get('use_test_data', 'false').lower() == 'true'
 
+        # Sauvegarde des fichiers uploadés ou utilisation des fichiers de test
         if besoins_file_storage and besoins_file_storage.filename:
             besoins_path = os.path.join(app.config['UPLOAD_FOLDER'], besoins_file_storage.filename)
             besoins_file_storage.save(besoins_path)
@@ -240,12 +295,16 @@ def index():
         except ValueError:
             smoothing_horizon_weeks_val = 3
 
+        # Récupération du paramètre de tri des lundis
+        week_sort_order = request.form.get('week_sort_order', 'closest')
+
         smoothing_params = {
             'output_file_path': os.path.join(app.config['UPLOAD_FOLDER'], 'besoins_groupes_output_web.txt'),
             'log_file_path': os.path.join(app.config['UPLOAD_FOLDER'], 'sothemalgo_log_web.txt'),
             'retreat_weeks': retreat_weeks_val,
             'auto_mode': request.form.get('auto_mode', 'True').lower() == 'true',
             'advance_retreat_weeks': smoothing_horizon_weeks_val,
+            'week_sort_order': week_sort_order,  
             'smoothing_json_path': os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_view.json'),
             'smoothing_ops_excel_path': os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_operations.csv'),
             'smoothing_csv_path': os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_report.csv'),
@@ -253,55 +312,57 @@ def index():
         }
 
         try:
+            # Mesure du temps global
+            start_total = time.time()
+
+            # Chargement des données
+            start_load = time.time()
             all_ofs = load_ofs_from_file(besoins_path)
             if not all_ofs:
                 app.logger.warning(f"Fichier OFs {besoins_path} vide ou échec du chargement.")
-
             bom_data = load_bom_from_file(nomenclature_path)
             if not bom_data:
                 app.logger.warning(f"Attention: Données de nomenclature depuis {nomenclature_path} vides ou échec du chargement.")
-
             posts_map, operations_map = load_posts_and_operations_data(
                 filepath_posts=posts_path,
                 filepath_post_unavailability=post_unavailability_path,
                 filepath_operations=operations_path
             )
+            load_time = time.time() - start_load
+            print(f"[TIMING] Data loading (OFs, BOM, Posts, Operations) : {load_time:.2f}s")
 
-            horizon_weeks = horizon_weeks_val
-            groups, all_ofs_with_groups = run_grouping_algorithm(
-                all_ofs if all_ofs else [],
-                bom_data if bom_data else [],
-                horizon_H_weeks_param=horizon_weeks
-            )
+            # ------------------------------------------------------------
+            # TRAITEMENT DIFFÉRENCIÉ SELON L'ACTION
+            # ------------------------------------------------------------
+            if action == 'group_only':
+                # Exécution du groupement uniquement
+                start_group = time.time()
+                groups, all_ofs_with_groups = run_grouping_algorithm(
+                    all_ofs if all_ofs else [],
+                    bom_data if bom_data else [],
+                    horizon_H_weeks_param=horizon_weeks_val
+                )
+                group_time = time.time() - start_group
+                print(f"[TIMING] Grouping algorithm : {group_time:.2f}s")
 
-            final_updated_ofs = smooth_and_schedule_groups(
-                groups,
-                all_ofs_with_groups,
-                bom_data if bom_data else [],
-                posts_map,
-                operations_map,
-                params=smoothing_params
-            )
+                # Sauvegarde de l'état groupé (groupes, OFs avec groupes, BOM)
+                with open(GROUP_STATE_FILE, 'wb') as f:
+                    pickle.dump((groups, all_ofs_with_groups, bom_data), f)
+                print(f"[STATE] Group state saved to {GROUP_STATE_FILE}")
 
-            for g in groups:
-                if hasattr(g, "calculate_consumption"):
-                    g.calculate_consumption(bom_data if bom_data else [])
+                # Écriture du fichier de sortie groupé (affichage des groupes)
+                write_grouped_needs_to_file(smoothing_params['output_file_path'], groups, all_ofs_with_groups)
+                print(f"[FILE] Grouped output written to {smoothing_params['output_file_path']}")
 
-            write_grouped_needs_to_file(smoothing_params['output_file_path'], groups, final_updated_ofs)
+                # Parsing pour affichage dans results_modern.html
+                parsed_data = parse_output_file(smoothing_params['output_file_path'])
 
-            if action == 'plan':
-                return redirect(url_for('planning_page'))
-
-            output_file_to_read = smoothing_params['output_file_path']
-
-            if os.path.exists(output_file_to_read) and os.path.getsize(output_file_to_read) > 0:
-                parsed_data = parse_output_file(output_file_to_read)
-
+                # Ajouter les stocks individuels pour l'affichage
                 for of in parsed_data.get('unassigned_ofs', []):
                     of['remaining_stock'] = '0.00'
 
-                print("✅ Final parsed data - Individual stocks should be available now")
-                print(f"✅ Sample OF data: {parsed_data.get('unassigned_ofs', [])[:1] if parsed_data.get('unassigned_ofs') else 'No unassigned OFs'}")
+                total_time = time.time() - start_total
+                print(f"[TIMING] TOTAL processing time (group only) : {total_time:.2f}s")
 
                 return render_template(
                     'results_modern.html',
@@ -309,18 +370,86 @@ def index():
                     unassigned_ofs=parsed_data.get('unassigned_ofs', []),
                     error=parsed_data.get('error')
                 )
-            else:
-                output_content = "L'algorithme a été exécuté. "
-                if final_updated_ofs:
-                    output_content += "Les OFs traités sont disponibles. Affichage brut :\n"
-                    output_content += "\n".join([str(of) for of in final_updated_ofs if of is not None])
-                elif groups:
-                    output_content += "Groupes créés mais pas d'OFs finaux après lissage ou fichier de sortie non généré.\n"
-                    output_content += "\n".join([str(g) for g in groups if g is not None])
-                else:
-                    output_content += "Aucun OF traité, aucun groupe créé ou aucun fichier de sortie généré."
 
-                return render_template('index_modern.html', output=output_content)
+            elif action == 'smooth_only':
+                # Vérifier que l'état groupé existe
+                if not os.path.exists(GROUP_STATE_FILE):
+                    error_msg = "Aucun groupement préalable trouvé. Veuillez d'abord lancer le groupement."
+                    app.logger.error(error_msg)
+                    return render_template('index_modern.html', error=error_msg)
+
+                # Charger l'état groupé
+                with open(GROUP_STATE_FILE, 'rb') as f:
+                    groups, all_ofs_with_groups, bom_data_saved = pickle.load(f)
+                print(f"[STATE] Group state loaded from {GROUP_STATE_FILE}")
+
+                # Exécution du lissage uniquement
+                start_smooth = time.time()
+                final_updated_ofs = smooth_and_schedule_groups(
+                    groups,
+                    all_ofs_with_groups,
+                    bom_data_saved if bom_data_saved else [],
+                    posts_map,
+                    operations_map,
+                    params=smoothing_params
+                )
+                smooth_time = time.time() - start_smooth
+                print(f"[TIMING] Smoothing & scheduling : {smooth_time:.2f}s")
+
+                # Écrire éventuellement le fichier groupé mis à jour (optionnel)
+                write_grouped_needs_to_file(smoothing_params['output_file_path'], groups, final_updated_ofs)
+
+                total_time = time.time() - start_total
+                print(f"[TIMING] TOTAL processing time (smooth only) : {total_time:.2f}s")
+
+                # Rediriger vers la page planning (qui lit smoothing_view.json)
+                return redirect(url_for('planning_page'))
+
+            else:
+                # Ancien comportement (complet) pour rétrocompatibilité
+                start_group = time.time()
+                groups, all_ofs_with_groups = run_grouping_algorithm(
+                    all_ofs if all_ofs else [],
+                    bom_data if bom_data else [],
+                    horizon_H_weeks_param=horizon_weeks_val
+                )
+                group_time = time.time() - start_group
+                print(f"[TIMING] Grouping algorithm : {group_time:.2f}s")
+
+                start_smooth = time.time()
+                final_updated_ofs = smooth_and_schedule_groups(
+                    groups,
+                    all_ofs_with_groups,
+                    bom_data if bom_data else [],
+                    posts_map,
+                    operations_map,
+                    params=smoothing_params
+                )
+                smooth_time = time.time() - start_smooth
+                print(f"[TIMING] Smoothing & scheduling : {smooth_time:.2f}s")
+
+                # Calcul des consommations (optionnel)
+                for g in groups:
+                    if hasattr(g, "calculate_consumption"):
+                        g.calculate_consumption(bom_data if bom_data else [])
+
+                write_grouped_needs_to_file(smoothing_params['output_file_path'], groups, final_updated_ofs)
+
+                # Si action == 'plan' (ancien nom), rediriger vers planning
+                if action == 'plan':
+                    return redirect(url_for('planning_page'))
+
+                # Sinon afficher les résultats groupés
+                parsed_data = parse_output_file(smoothing_params['output_file_path'])
+                for of in parsed_data.get('unassigned_ofs', []):
+                    of['remaining_stock'] = '0.00'
+
+                return render_template(
+                    'results_modern.html',
+                    groups=parsed_data.get('groups', []),
+                    unassigned_ofs=parsed_data.get('unassigned_ofs', []),
+                    error=parsed_data.get('error')
+                )
 
         except Exception as e:
             app.logger.error(f"Erreur durant l'exécution de Sothemalgo: {e}", exc_info=True)
@@ -329,6 +458,7 @@ def index():
     return render_template('index_modern.html')
 
 
+# Les autres routes restent inchangées
 @app.route('/display-output')
 def display_output():
     base_dir = BASE_DIR
@@ -539,6 +669,7 @@ def api_smoothing():
 
 @app.route('/smoothing')
 def smoothing_page():
+    start = time.time()
     json_path = os.path.join(app.config['UPLOAD_FOLDER'], 'smoothing_view.json')
     data = {"generated_at": None, "items": []}
     try:
@@ -547,6 +678,8 @@ def smoothing_page():
                 data = json.load(f)
     except Exception as e:
         data = {"generated_at": None, "items": [], "error": str(e)}
+    elapsed = time.time() - start
+    print(f"[TIMING] /smoothing loaded JSON in {elapsed:.2f}s, items count: {len(data.get('items', []))}")
     return render_template('smoothing_modern.html', data=data, items=data.get('items') or [])
 
 
